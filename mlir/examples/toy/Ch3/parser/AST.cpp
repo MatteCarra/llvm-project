@@ -204,8 +204,7 @@ void ASTDumper::dump(PrototypeAST *node) {
   llvm::errs() << "Proto '" << node->getName() << "' " << loc(node) << "\n";
   indent();
   llvm::errs() << "Params: [";
-  llvm::interleaveComma(node->getArgs(), llvm::errs(),
-                        [](auto &arg) { llvm::errs() << arg->getName(); });
+  llvm::interleaveComma(node->getArgs(), llvm::errs(), [](auto &arg) { llvm::errs() << arg->getName(); });
   llvm::errs() << "]\n";
 }
 

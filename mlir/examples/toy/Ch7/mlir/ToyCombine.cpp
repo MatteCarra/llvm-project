@@ -26,21 +26,6 @@ namespace {
 /// Fold constants.
 OpFoldResult ConstantOp::fold(ArrayRef<Attribute> operands) { return value(); }
 
-/// Fold struct constants.
-OpFoldResult StructConstantOp::fold(ArrayRef<Attribute> operands) {
-  return value();
-}
-
-/// Fold simple struct access operations that access into a constant.
-OpFoldResult StructAccessOp::fold(ArrayRef<Attribute> operands) {
-  auto structAttr = operands.front().dyn_cast_or_null<mlir::ArrayAttr>();
-  if (!structAttr)
-    return nullptr;
-
-  size_t elementIndex = index();
-  return structAttr[elementIndex];
-}
-
 /// This is an example of a c++ rewrite pattern for the TransposeOp. It
 /// optimizes the following scenario: transpose(transpose(x)) -> x
 struct SimplifyRedundantTranspose : public mlir::OpRewritePattern<TransposeOp> {
@@ -53,9 +38,7 @@ struct SimplifyRedundantTranspose : public mlir::OpRewritePattern<TransposeOp> {
   /// This method attempts to match a pattern and rewrite it. The rewriter
   /// argument is the orchestrator of the sequence of rewrites. The pattern is
   /// expected to interact with it to perform any changes to the IR from here.
-  mlir::LogicalResult
-  matchAndRewrite(TransposeOp op,
-                  mlir::PatternRewriter &rewriter) const override {
+  mlir::LogicalResult matchAndRewrite(TransposeOp op, mlir::PatternRewriter &rewriter) const override {
     // Look through the input of the current transpose.
     mlir::Value transposeInput = op.getOperand();
     TransposeOp transposeInputOp = transposeInput.getDefiningOp<TransposeOp>();
@@ -81,6 +64,5 @@ void TransposeOp::getCanonicalizationPatterns(OwningRewritePatternList &results,
 /// that they can be picked up by the Canonicalization framework.
 void ReshapeOp::getCanonicalizationPatterns(OwningRewritePatternList &results,
                                             MLIRContext *context) {
-  results.insert<ReshapeReshapeOptPattern, RedundantReshapeOptPattern,
-                 FoldConstantReshapeOptPattern>(context);
+  results.insert<ReshapeReshapeOptPattern, RedundantReshapeOptPattern, FoldConstantReshapeOptPattern>(context);
 }

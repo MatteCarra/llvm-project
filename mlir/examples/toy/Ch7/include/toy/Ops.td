@@ -290,12 +290,9 @@ def StructAccessOp : Toy_Op<"struct_access", [NoSideEffect]> {
   ];
 
   let verifier = [{ return ::verify(*this); }];
-
-  // Set the folder bit so that we can fold constant accesses.
-  let hasFolder = 1;
 }
 
-def StructConstantOp : Toy_Op<"struct_constant", [ConstantLike, NoSideEffect]> {
+def StructConstantOp : Toy_Op<"struct_constant", [NoSideEffect]> {
   let summary = "struct constant";
   let description = [{
     Constant operation turns a literal struct value into an SSA value. The data
@@ -309,13 +306,14 @@ def StructConstantOp : Toy_Op<"struct_constant", [ConstantLike, NoSideEffect]> {
     ```
   }];
 
-  let arguments = (ins ArrayAttr:$value);
+  let arguments = (ins Variadic<Toy_Type>:$value);
   let results = (outs Toy_StructType:$output);
 
-  let assemblyFormat = "$value attr-dict `:` type($output)";
+  let assemblyFormat = "($value^ `:` type($value))? attr-dict `:` type($output)";
 
-  let verifier = [{ return ::verify(*this); }];
-  let hasFolder = 1;
+  let builders = [
+    OpBuilder<(ins "ArrayRef<Value>":$value)>
+  ];
 }
 
 def TransposeOp : Toy_Op<"transpose",

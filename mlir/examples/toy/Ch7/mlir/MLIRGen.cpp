@@ -419,28 +419,22 @@ private:
   /// other literals in an Attribute attached to a `toy.struct_constant`
   /// operation. This function returns the generated constant, along with the
   /// corresponding struct type.
-  std::pair<mlir::ArrayAttr, mlir::Type>
-  getConstantAttr(StructLiteralExprAST &lit) {
-    std::vector<mlir::Attribute> attrElements;
-    std::vector<mlir::Type> typeElements;
+  std::vector<mlir::Value> getConstantAttr(StructLiteralExprAST &lit) {
+    std::vector<mlir::Value> values;
 
     for (auto &var : lit.getValues()) {
       if (auto *number = llvm::dyn_cast<NumberExprAST>(var.get())) {
-        attrElements.push_back(getConstantAttr(*number));
-        typeElements.push_back(getType(llvm::None));
+        values.push_back(mlirGen(*number));
       } else if (auto *lit = llvm::dyn_cast<LiteralExprAST>(var.get())) {
-        attrElements.push_back(getConstantAttr(*lit));
-        typeElements.push_back(getType(llvm::None));
+        values.push_back(mlirGen(*lit));
       } else {
         auto *structLit = llvm::cast<StructLiteralExprAST>(var.get());
-        auto attrTypePair = getConstantAttr(*structLit);
-        attrElements.push_back(attrTypePair.first);
-        typeElements.push_back(attrTypePair.second);
+        auto value = mlirGen(*structLit);
+        values.push_back(value);
       }
-    }
-    mlir::ArrayAttr dataAttr = builder.getArrayAttr(attrElements);
-    mlir::Type dataType = StructType::get(typeElements);
-    return std::make_pair(dataAttr, dataType);
+    };
+
+    return values;
   }
 
   /// Emit an array literal.
@@ -457,13 +451,11 @@ private:
   /// other literals in an Attribute attached to a `toy.struct_constant`
   /// operation.
   mlir::Value mlirGen(StructLiteralExprAST &lit) {
-    mlir::ArrayAttr dataAttr;
-    mlir::Type dataType;
-    std::tie(dataAttr, dataType) = getConstantAttr(lit);
+    auto test = getConstantAttr(lit);
 
     // Build the MLIR op `toy.struct_constant`. This invokes the
     // `StructConstantOp::build` method.
-    return builder.create<StructConstantOp>(loc(lit.loc()), dataType, dataAttr);
+    return builder.create<StructConstantOp>(loc(lit.loc()), test);
   }
 
   /// Recursive helper function to accumulate the data that compose an array

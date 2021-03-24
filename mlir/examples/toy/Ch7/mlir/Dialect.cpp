@@ -141,6 +141,20 @@ void ConstantOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
   ConstantOp::build(builder, state, dataType, dataAttribute);
 }
 
+
+//===----------------------------------------------------------------------===//
+// GenericCallOp
+
+void StructConstantOp::build(mlir::OpBuilder &builder, mlir::OperationState &state, ArrayRef<mlir::Value> value) {
+  // Generic call always returns an unranked Tensor initially.
+  std::vector<mlir::Type> types;
+  for(auto& v: value) {
+    types.push_back(v.getType());
+  }
+  state.addTypes(StructType::get(types));
+  state.addOperands(value);
+}
+
 /// The 'OpAsmParser' class provides a collection of methods for parsing
 /// various punctuation, as well as attributes, operands, types, etc. Each of
 /// these methods returns a `ParseResult`. This class is a wrapper around
@@ -229,9 +243,9 @@ static mlir::LogicalResult verify(ConstantOp op) {
   return verifyConstantForType(op.getResult().getType(), op.value(), op);
 }
 
-static mlir::LogicalResult verify(StructConstantOp op) {
+/*static mlir::LogicalResult verify(StructConstantOp op) {
   return verifyConstantForType(op.getResult().getType(), op.value(), op);
-}
+}*/
 
 /// Infer the output shape of the ConstantOp, this is required by the shape
 /// inference interface.
@@ -560,9 +574,5 @@ mlir::Operation *ToyDialect::materializeConstant(mlir::OpBuilder &builder,
                                                  mlir::Attribute value,
                                                  mlir::Type type,
                                                  mlir::Location loc) {
-  if (type.isa<StructType>())
-    return builder.create<StructConstantOp>(loc, type,
-                                            value.cast<mlir::ArrayAttr>());
-  return builder.create<ConstantOp>(loc, type,
-                                    value.cast<mlir::DenseElementsAttr>());
+  return builder.create<ConstantOp>(loc, type, value.cast<mlir::DenseElementsAttr>());
 }

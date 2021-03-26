@@ -131,8 +131,8 @@ def CastOp : Toy_Op<"cast", [
     mismatching constant dimension.
   }];
 
-  let arguments = (ins F64Tensor:$input);
-  let results = (outs F64Tensor:$output);
+  let arguments = (ins Toy_Type:$input);
+  let results = (outs Toy_Type:$output);
 
   let assemblyFormat = "$input attr-dict `:` type($input) `to` type($output)";
 }

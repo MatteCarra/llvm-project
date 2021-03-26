@@ -49,6 +49,8 @@ public:
   /// Provide a utility accessor to the dialect namespace. This is used by
   /// several utilities for casting between dialects.
   static llvm::StringRef getDialectNamespace() { return "toy"; }
+
+  static bool areCastCompatible(mlir::Type input, mlir::Type output);
 };
 
 } // end namespace toy

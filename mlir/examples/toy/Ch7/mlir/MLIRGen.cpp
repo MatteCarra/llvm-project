@@ -580,7 +580,7 @@ private:
       mlir::Type type = getType(varType, vardecl.loc());
       if (!type)
         return nullptr;
-      if (type != value.getType()) {
+      if (ToyDialect::areCastCompatible(type, value.getType())) {
         emitError(loc(vardecl.loc()))
             << "struct type of initializer is different than the variable "
                "declaration. Got "
@@ -592,8 +592,7 @@ private:
       // declared with specific shape, we emit a "reshape" operation. It will
       // get optimized out later as needed.
     } else if (!varType.shape.empty()) {
-      value = builder.create<ReshapeOp>(loc(vardecl.loc()),
-                                        getType(varType.shape), value);
+      value = builder.create<ReshapeOp>(loc(vardecl.loc()), getType(varType.shape), value);
     }
 
     // Register the value in the symbol table.

@@ -229,10 +229,6 @@ static mlir::LogicalResult verify(ConstantOp op) {
   return verifyConstantForType(op.getResult().getType(), op.value(), op);
 }
 
-static mlir::LogicalResult verify(StructConstantOp op) {
-  return verifyConstantForType(op.getResult().getType(), op.value(), op);
-}
-
 /// Infer the output shape of the ConstantOp, this is required by the shape
 /// inference interface.
 void ConstantOp::inferShapes() { getResult().setType(value().getType()); }
@@ -263,13 +259,9 @@ void CastOp::inferShapes() { getResult().setType(getOperand().getType()); }
 bool CastOp::areCastCompatible(TypeRange inputs, TypeRange outputs) {
   if (inputs.size() != 1 || outputs.size() != 1)
     return false;
-  // The inputs must be Tensors with the same element type.
-  TensorType input = inputs.front().dyn_cast<TensorType>();
-  TensorType output = outputs.front().dyn_cast<TensorType>();
-  if (!input || !output || input.getElementType() != output.getElementType())
-    return false;
+
   // The shape is required to match if both types are ranked.
-  return !input.hasRank() || !output.hasRank() || input == output;
+  return ToyUtils::areTypesCompatible(inputs.front(), outputs.front());
 }
 
 //===----------------------------------------------------------------------===//
@@ -370,6 +362,21 @@ static mlir::LogicalResult verify(StructAccessOp op) {
   return mlir::success();
 }
 
+void StructAccessOp::inferShapes() {
+  StructType structTy = input().getType().cast<StructType>();
+  getResult().setType(structTy.getElementTypes()[index()]);
+}
+
+//===----------------------------------------------------------------------===//
+// StructConstOp
+void StructConstantOp::inferShapes() {
+  std::vector<Type> types;
+  for(int i = 0; i < getNumOperands(); i++) {
+    types.push_back(getOperand(i).getType());
+  }
+  getResult().setType(StructType::get(types));
+}
+
 //===----------------------------------------------------------------------===//
 // TransposeOp
 
@@ -459,6 +466,44 @@ struct StructTypeStorage : public mlir::TypeStorage {
   llvm::ArrayRef<mlir::Type> elementTypes;
 };
 } // end namespace detail
+
+bool ToyUtils::areTypesCompatible(Type input, Type output) {
+  {
+    TensorType type1 = input.dyn_cast<TensorType>();
+    TensorType type2 = output.dyn_cast<TensorType>();
+
+    if(type1 && type2) {
+      if(type1.getElementType() != type2.getElementType())
+        return false;
+
+      // The shape is required to match if both types are ranked.
+      return !type1.hasRank() || !type2.hasRank() || input == output;
+    }
+  }
+
+  {
+    StructType type1 = input.dyn_cast<StructType>();
+    StructType type2 = output.dyn_cast<StructType>();
+
+    if(type1 && type2) {
+      if(type1.getNumElementTypes() != type2.getNumElementTypes())
+        return false;
+
+      auto elementTypes1 = type1.getElementTypes();
+      auto elementTypes2 = type2.getElementTypes();
+
+      for(size_t i = 0; i < elementTypes1.size(); i++) {
+        if(!areTypesCompatible(elementTypes1[i], elementTypes2[i]))
+          return false;
+      }
+
+      return true;
+    }
+  }
+
+  return false;
+}
+
 } // end namespace toy
 } // end namespace mlir
 
@@ -559,9 +604,8 @@ mlir::Operation *ToyDialect::materializeConstant(mlir::OpBuilder &builder,
                                                  mlir::Attribute value,
                                                  mlir::Type type,
                                                  mlir::Location loc) {
-  if (type.isa<StructType>())
-    return builder.create<StructConstantOp>(loc, type,
-                                            value.cast<mlir::ArrayAttr>());
-  return builder.create<ConstantOp>(loc, type,
-                                    value.cast<mlir::DenseElementsAttr>());
+
+  assert(!type.isa<StructType>() && "Fatal error materializeConstant");
+
+  return builder.create<ConstantOp>(loc, type, value.cast<mlir::DenseElementsAttr>());
 }

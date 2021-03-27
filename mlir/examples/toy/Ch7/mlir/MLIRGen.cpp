@@ -419,28 +419,30 @@ private:
   /// other literals in an Attribute attached to a `toy.struct_constant`
   /// operation. This function returns the generated constant, along with the
   /// corresponding struct type.
-  std::pair<mlir::ArrayAttr, mlir::Type>
-  getConstantAttr(StructLiteralExprAST &lit) {
-    std::vector<mlir::Attribute> attrElements;
+  std::pair<std::vector<mlir::Value>, mlir::Type> getValues(StructLiteralExprAST &lit) {
+    std::vector<mlir::Value> values;
     std::vector<mlir::Type> typeElements;
-
     for (auto &var : lit.getValues()) {
       if (auto *number = llvm::dyn_cast<NumberExprAST>(var.get())) {
-        attrElements.push_back(getConstantAttr(*number));
-        typeElements.push_back(getType(llvm::None));
+        auto value = mlirGen(*number);
+
+        values.push_back(value);
+        typeElements.push_back(value.getType());
       } else if (auto *lit = llvm::dyn_cast<LiteralExprAST>(var.get())) {
-        attrElements.push_back(getConstantAttr(*lit));
-        typeElements.push_back(getType(llvm::None));
+        auto value = mlirGen(*lit);
+
+        values.push_back(value);
+        typeElements.push_back(value.getType());
       } else {
         auto *structLit = llvm::cast<StructLiteralExprAST>(var.get());
-        auto attrTypePair = getConstantAttr(*structLit);
-        attrElements.push_back(attrTypePair.first);
-        typeElements.push_back(attrTypePair.second);
+        auto value = mlirGen(*structLit);
+
+        values.push_back(value);
+        typeElements.push_back(value.getType());
       }
     }
-    mlir::ArrayAttr dataAttr = builder.getArrayAttr(attrElements);
-    mlir::Type dataType = StructType::get(typeElements);
-    return std::make_pair(dataAttr, dataType);
+
+    return std::make_pair(values, StructType::get(typeElements));
   }
 
   /// Emit an array literal.
@@ -457,13 +459,13 @@ private:
   /// other literals in an Attribute attached to a `toy.struct_constant`
   /// operation.
   mlir::Value mlirGen(StructLiteralExprAST &lit) {
-    mlir::ArrayAttr dataAttr;
+    std::vector<mlir::Value> values;
     mlir::Type dataType;
-    std::tie(dataAttr, dataType) = getConstantAttr(lit);
+    std::tie(values, dataType) = getValues(lit);
 
     // Build the MLIR op `toy.struct_constant`. This invokes the
     // `StructConstantOp::build` method.
-    return builder.create<StructConstantOp>(loc(lit.loc()), dataType, dataAttr);
+    return builder.create<StructConstantOp>(loc(lit.loc()), dataType, values);
   }
 
   /// Recursive helper function to accumulate the data that compose an array
@@ -588,7 +590,8 @@ private:
       mlir::Type type = getType(varType, vardecl.loc());
       if (!type)
         return nullptr;
-      if (type != value.getType()) {
+
+      if (!ToyUtils::areTypesCompatible(type, value.getType())) {
         emitError(loc(vardecl.loc()))
             << "struct type of initializer is different than the variable "
                "declaration. Got "

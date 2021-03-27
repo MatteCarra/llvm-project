@@ -26,6 +26,12 @@ namespace toy {
 namespace detail {
 struct StructTypeStorage;
 } // end namespace detail
+
+class ToyUtils {
+public:
+  static bool areTypesCompatible(Type input, Type output);
+};
+
 } // end namespace toy
 } // end namespace mlir
 

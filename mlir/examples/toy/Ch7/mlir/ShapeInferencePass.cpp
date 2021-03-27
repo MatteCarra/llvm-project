@@ -93,16 +93,36 @@ public:
   /// operands inferred.
   static bool allOperandsInferred(Operation *op) {
     return llvm::all_of(op->getOperandTypes(), [](Type operandType) {
-      return operandType.isa<RankedTensorType>();
+      return isTypeWellDefined(operandType);
     });
+  }
+
+  static bool isTypeWellDefined(Type type) {
+    if(auto structType = type.dyn_cast<StructType>()) {
+      return llvm::all_of(structType.getElementTypes(), [](Type innerType) {
+        return isTypeWellDefined(innerType);
+      });
+    }
+
+    return type.isa<RankedTensorType>();
   }
 
   /// A utility method that returns if the given operation has a dynamically
   /// shaped result.
   static bool returnsDynamicShape(Operation *op) {
     return llvm::any_of(op->getResultTypes(), [](Type resultType) {
-      return !resultType.isa<RankedTensorType>();
+      return isTypeDynamic(resultType);
     });
+  }
+
+  static bool isTypeDynamic(Type type) {
+    if(auto structType = type.dyn_cast<StructType>()) {
+      return llvm::any_of(structType.getElementTypes(), [](Type innerType) {
+        return isTypeDynamic(innerType);
+      });
+    }
+
+    return !type.isa<RankedTensorType>();
   }
 };
 } // end anonymous namespace

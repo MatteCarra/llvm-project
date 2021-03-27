@@ -137,8 +137,8 @@ def CastOp : Toy_Op<"cast", [
     mismatching constant dimension.
   }];
 
-  let arguments = (ins F64Tensor:$input);
-  let results = (outs F64Tensor:$output);
+  let arguments = (ins Toy_Type:$input);
+  let results = (outs Toy_Type:$output);
 
   let assemblyFormat = "$input attr-dict `:` type($input) `to` type($output)";
 }
@@ -277,7 +277,7 @@ def ReturnOp : Toy_Op<"return", [NoSideEffect, HasParent<"FuncOp">,
   let verifier = [{ return ::verify(*this); }];
 }
 
-def StructAccessOp : Toy_Op<"struct_access", [NoSideEffect]> {
+def StructAccessOp : Toy_Op<"struct_access", [NoSideEffect, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
   let summary = "struct access";
   let description = [{
     Access the Nth element of a value returning a struct type.
@@ -296,12 +296,9 @@ def StructAccessOp : Toy_Op<"struct_access", [NoSideEffect]> {
   ];
 
   let verifier = [{ return ::verify(*this); }];
-
-  // Set the folder bit so that we can fold constant accesses.
-  let hasFolder = 1;
 }
 
-def StructConstantOp : Toy_Op<"struct_constant", [ConstantLike, NoSideEffect]> {
+def StructConstantOp : Toy_Op<"struct_constant", [NoSideEffect, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
   let summary = "struct constant";
   let description = [{
     Constant operation turns a literal struct value into an SSA value. The data
@@ -315,13 +312,10 @@ def StructConstantOp : Toy_Op<"struct_constant", [ConstantLike, NoSideEffect]> {
     ```
   }];
 
-  let arguments = (ins ArrayAttr:$value);
+  let arguments = (ins Variadic<Toy_Type>:$value);
   let results = (outs Toy_StructType:$output);
 
-  let assemblyFormat = "$value attr-dict `:` type($output)";
-
-  let verifier = [{ return ::verify(*this); }];
-  let hasFolder = 1;
+  let assemblyFormat = "($value^ `:` type($value))? attr-dict `:` type($output)";
 }
 
 def TransposeOp : Toy_Op<"transpose",

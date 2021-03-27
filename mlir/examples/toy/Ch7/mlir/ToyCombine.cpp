@@ -26,21 +26,6 @@ namespace {
 /// Fold constants.
 OpFoldResult ConstantOp::fold(ArrayRef<Attribute> operands) { return value(); }
 
-/// Fold struct constants.
-OpFoldResult StructConstantOp::fold(ArrayRef<Attribute> operands) {
-  return value();
-}
-
-/// Fold simple struct access operations that access into a constant.
-OpFoldResult StructAccessOp::fold(ArrayRef<Attribute> operands) {
-  auto structAttr = operands.front().dyn_cast_or_null<mlir::ArrayAttr>();
-  if (!structAttr)
-    return nullptr;
-
-  size_t elementIndex = index();
-  return structAttr[elementIndex];
-}
-
 /// This is an example of a c++ rewrite pattern for the TransposeOp. It
 /// optimizes the following scenario: transpose(transpose(x)) -> x
 struct SimplifyRedundantTranspose : public mlir::OpRewritePattern<TransposeOp> {

@@ -187,11 +187,10 @@ private:
         values.push_back(parseNumberExpr());
         if (!values.back())
           return nullptr;
-      } else {
-        if (lexer.getCurToken() != '{')
-          return parseError<ExprAST>("{, [, or number",
-                                     "in struct literal expression");
+      } else if (lexer.getCurToken() == '{') {
         values.push_back(parseStructLiteralExpr());
+      } else {
+        values.push_back(parseIdentifierExpr());
       }
 
       // End of this list on '}'

@@ -428,17 +428,35 @@ private:
 
         values.push_back(value);
         typeElements.push_back(value.getType());
-      } else if (auto *lit = llvm::dyn_cast<LiteralExprAST>(var.get())) {
-        auto value = mlirGen(*lit);
+      } else if (auto *lit2 = llvm::dyn_cast<LiteralExprAST>(var.get())) {
+        auto value = mlirGen(*lit2);
 
         values.push_back(value);
         typeElements.push_back(value.getType());
-      } else {
-        auto *structLit = llvm::cast<StructLiteralExprAST>(var.get());
+      } else if(auto *structLit = llvm::dyn_cast<StructLiteralExprAST>(var.get())){
         auto value = mlirGen(*structLit);
 
         values.push_back(value);
         typeElements.push_back(value.getType());
+      } else if(auto *variable = llvm::dyn_cast<VariableExprAST>(var.get())) {
+        auto var = symbolTable.lookup(variable->getName());
+
+        if(!var.first) {
+          emitError(loc(lit.loc()), "error: unknown variable '") << variable->getName() << "'";
+          break;
+        }
+
+        auto value = var.first;
+
+        values.push_back(value);
+        typeElements.push_back(value.getType());
+      } else if(auto *callOp = llvm::dyn_cast<CallExprAST>(var.get())) {
+        auto value = mlirGen(*callOp);
+
+        values.push_back(value);
+        typeElements.push_back(value.getType());
+      } else {
+        emitError(loc(var.get()->loc()), "error: illegal argument '") << "'";
       }
     }
 

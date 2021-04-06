@@ -156,8 +156,10 @@ int loadAndProcessMLIR(mlir::MLIRContext &context,
 
     // Partially lower the toy dialect with a few cleanups afterwards.
     optPM.addPass(mlir::toy::createLowerToAffinePass());
+    optPM.addPass(mlir::toy::createLowerPrintOp());
     optPM.addPass(mlir::createCanonicalizerPass());
     optPM.addPass(mlir::createCSEPass());
+    pm.addPass(mlir::createNormalizeMemRefsPass());
 
     // Add optimizations if enabled.
     if (enableOpt) {

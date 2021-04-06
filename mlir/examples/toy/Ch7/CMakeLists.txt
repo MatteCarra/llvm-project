@@ -20,6 +20,7 @@ add_toy_chapter(toyc-ch7
   mlir/Dialect.cpp
   mlir/LowerToAffineLoops.cpp
   mlir/LowerToLLVM.cpp
+  mlir/LowerPrintOp.cpp
   mlir/ShapeInferencePass.cpp
   mlir/ToyCombine.cpp
 

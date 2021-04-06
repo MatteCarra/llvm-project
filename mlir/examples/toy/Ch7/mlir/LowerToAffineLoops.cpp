@@ -21,6 +21,7 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/Sequence.h"
+#include "mlir/Dialect/SCF/SCF.h"
 
 using namespace mlir;
 
@@ -31,7 +32,10 @@ using namespace mlir;
 /// Convert the given TensorType into the corresponding MemRefType.
 static MemRefType convertTensorToMemRef(TensorType type) {
   assert(type.hasRank() && "expected only ranked shapes");
-  return MemRefType::get(type.getShape(), type.getElementType());
+  assert(type.getRank() == 2 && "Expected 2 ranks");
+  auto * context = type.getContext();
+  auto map = AffineMap::get(2, 0, { mlir::getAffineDimExpr(1, context), mlir::getAffineDimExpr(0, context) }, context);
+  return MemRefType::get(type.getShape(), type.getElementType(), map);
 }
 
 /// Insert an allocation and deallocation for the given MemRefType.

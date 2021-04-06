@@ -215,6 +215,28 @@ def PrintOp : Toy_Op<"print"> {
   let assemblyFormat = "$input attr-dict `:` type($input)";
 }
 
+def PrintfOp : Toy_Op<"printf"> {
+  let summary = "printf operation";
+  let description = [{
+    The "printf" builtin operation prints a float, and produces
+    no results.
+  }];
+
+  // The print operation takes an input tensor to print.
+  // We also allow a F64 to enable interop during partial lowering.
+  let arguments = (ins F64:$input);
+
+  let assemblyFormat = "$input attr-dict `:` type($input)";
+}
+
+def PrintNewLineOp : Toy_Op<"print_newline"> {
+  let summary = "printf operation";
+  let description = [{
+    The "print_newline" builtin operation prints a new line, and produces
+    no results.
+  }];
+}
+
 def ReshapeOp : Toy_Op<"reshape", [NoSideEffect]> {
   let summary = "tensor reshape operation";
   let description = [{

@@ -35,6 +35,7 @@ static MemRefType convertTensorToMemRef(TensorType type) {
   assert(type.getRank() == 2 && "Expected 2 ranks");
   auto * context = type.getContext();
 
+  //index_old = i * dim_1 + j
   auto index = mlir::getAffineBinaryOpExpr(
       AffineExprKind::Add,
       mlir::getAffineBinaryOpExpr(
@@ -45,28 +46,35 @@ static MemRefType convertTensorToMemRef(TensorType type) {
       mlir::getAffineDimExpr(1, context)
   );
 
+  //i' = index_old floordiv 2
+  auto iNew = mlir::getAffineBinaryOpExpr(
+      AffineExprKind::FloorDiv,
+      index,
+      mlir::getAffineConstantExpr(2, context)
+  );
+
+  //j' = 1 - index_old mod 2
+  auto jNew = mlir::getAffineBinaryOpExpr(
+      AffineExprKind::Add,
+      mlir::getAffineConstantExpr(1, context),
+      mlir::getAffineBinaryOpExpr(
+          AffineExprKind::Mul,
+          mlir::getAffineBinaryOpExpr(AffineExprKind::Mod, index, mlir::getAffineConstantExpr(2, context)),
+          mlir::getAffineConstantExpr(-1, context)
+      )
+  );
+
+  //k = i' * 2 + j'
   auto firstDim =
       mlir::getAffineBinaryOpExpr(
           AffineExprKind::Add,
           mlir::getAffineBinaryOpExpr(
               AffineExprKind::Mul,
-              mlir::getAffineBinaryOpExpr(
-                  AffineExprKind::FloorDiv,
-                  index,
-                  mlir::getAffineConstantExpr(2, context)
-              ),
+              iNew,
               mlir::getAffineConstantExpr(2, context)
           ),
-          mlir::getAffineBinaryOpExpr(
-              AffineExprKind::Add,
-              mlir::getAffineConstantExpr(1, context),
-              mlir::getAffineBinaryOpExpr(
-                  AffineExprKind::Mul,
-                  mlir::getAffineBinaryOpExpr(AffineExprKind::Mod, index, mlir::getAffineConstantExpr(2, context)),
-                  mlir::getAffineConstantExpr(-1, context)
-              )
-          )
-          );
+          jNew
+      );
 
 
   auto map = AffineMap::get(2, 0, { firstDim }, context);

@@ -369,4 +369,26 @@ def TransposeOp : Toy_Op<"transpose",
   let verifier = [{ return ::verify(*this); }];
 }
 
+def TensorSliceOp : Toy_Op<"tensor_slice", [NoSideEffect, DeclareOpInterfaceMethods<ShapeInferenceOpInterface>]> {
+  let summary = "tensor reshape operation";
+  let description = [{
+    Reshape operation is transforming its input tensor into a new sliced tensor. For example:
+
+    ```mlir
+       %0 = toy.tensor_slice %arg1 [ [0,1] : [3, 5] ] :  tensor<5x5xf64> -> tensor<3x4xf64>
+    ```
+  }];
+
+  let arguments = (ins F64Tensor:$input, I64ArrayAttr:$lower, I64ArrayAttr:$upper);
+
+  let assemblyFormat = [{
+    $input `[` $lower `:` $upper `]` attr-dict `:` type($input) `->` type($output)
+  }];
+
+  // We expect that the reshape operation returns a statically shaped tensor.
+  let results = (outs F64Tensor:$output);
+
+  let verifier = [{ return ::verify(*this); }];
+}
+
 #endif // TOY_OPS

@@ -401,6 +401,34 @@ static mlir::LogicalResult verify(TransposeOp op) {
 }
 
 //===----------------------------------------------------------------------===//
+// TensorSliceOp
+
+static mlir::LogicalResult verify(TensorSliceOp op) {
+  auto inputType = op.input().getType().dyn_cast<RankedTensorType>();
+  auto lower = op.lower();
+  auto upper = op.upper();
+
+  if(inputType && lower.size() != inputType.getRank())
+    return op.emitError() << "Lower size should match input rank";
+
+  if(inputType && upper.size() != inputType.getRank())
+    return op.emitError() << "Upper size should match input rank";
+
+  return mlir::success();
+}
+
+void TensorSliceOp::inferShapes() {
+  std::vector<int64_t> dimensions;
+  dimensions.reserve(lower().size());
+
+  for(int i = 0; i < lower().size(); i++) {
+    dimensions.push_back(upper().getValue()[i].cast<IntegerAttr>().getInt() - lower().getValue()[i].cast<IntegerAttr>().getInt());
+  }
+
+  output().setType(RankedTensorType::get(dimensions, input().getType().dyn_cast<RankedTensorType>().getElementType()));
+}
+
+//===----------------------------------------------------------------------===//
 // Toy Types
 //===----------------------------------------------------------------------===//
 

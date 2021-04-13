@@ -32,19 +32,27 @@ using namespace mlir;
 /// Convert the given TensorType into the corresponding MemRefType.
 static MemRefType convertTensorToMemRef(TensorType type) {
   assert(type.hasRank() && "expected only ranked shapes");
-  assert(type.getRank() == 2 && "Expected 2 ranks");
   auto * context = type.getContext();
 
   //index_old = i * dim_1 + j
-  auto index = mlir::getAffineBinaryOpExpr(
-      AffineExprKind::Add,
-      mlir::getAffineBinaryOpExpr(
+  AffineExpr index = mlir::getAffineConstantExpr(0, context);
+  for(int i = 0; i < type.getRank(); i++) {
+    AffineExpr currIndex = mlir::getAffineDimExpr(i, context);
+
+    for(int j = i + 1; j < type.getRank(); j++) {
+      currIndex = mlir::getAffineBinaryOpExpr(
           AffineExprKind::Mul,
-          mlir::getAffineDimExpr(0, context),
-          mlir::getAffineConstantExpr(type.getShape()[1], context)
-      ),
-      mlir::getAffineDimExpr(1, context)
-  );
+          currIndex,
+          mlir::getAffineConstantExpr(type.getShape()[j], context)
+      );
+    }
+
+    index = mlir::getAffineBinaryOpExpr(
+        AffineExprKind::Add,
+        index,
+        currIndex
+    );
+  }
 
   //i' = index_old floordiv 2
   auto iNew = mlir::getAffineBinaryOpExpr(
@@ -77,7 +85,7 @@ static MemRefType convertTensorToMemRef(TensorType type) {
       );
 
 
-  auto map = AffineMap::get(2, 0, { firstDim }, context);
+  auto map = AffineMap::get(type.getRank(), 0, { firstDim }, context);
   return MemRefType::get(type.getShape(), type.getElementType(), map);
 }
 

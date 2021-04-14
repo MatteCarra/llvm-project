@@ -403,29 +403,45 @@ static mlir::LogicalResult verify(TransposeOp op) {
 //===----------------------------------------------------------------------===//
 // TensorSliceOp
 
-static mlir::LogicalResult verify(TensorSliceOp op) {
-  auto inputType = op.input().getType().dyn_cast<RankedTensorType>();
-  auto lower = op.lower();
-  auto upper = op.upper();
-
-  if(inputType && lower.size() != inputType.getRank())
-    return op.emitError() << "Lower size should match input rank";
-
-  if(inputType && upper.size() != inputType.getRank())
-    return op.emitError() << "Upper size should match input rank";
-
-  return mlir::success();
-}
-
-void TensorSliceOp::inferShapes() {
+void TensorSliceOp::build(mlir::OpBuilder &builder, mlir::OperationState &state, mlir::Value input, ArrayAttr lower, ArrayAttr upper) {
   std::vector<int64_t> dimensions;
-  dimensions.reserve(lower().size());
+  dimensions.reserve(lower.size());
 
-  for(int i = 0; i < lower().size(); i++) {
-    dimensions.push_back(upper().getValue()[i].cast<IntegerAttr>().getInt() - lower().getValue()[i].cast<IntegerAttr>().getInt());
+  for(size_t i = 0; i < lower.size(); i++) {
+    dimensions.push_back(upper.getValue()[i].cast<IntegerAttr>().getInt() - lower.getValue()[i].cast<IntegerAttr>().getInt());
   }
 
-  output().setType(RankedTensorType::get(dimensions, input().getType().dyn_cast<RankedTensorType>().getElementType()));
+  auto outputType = RankedTensorType::get(dimensions, input.getType().dyn_cast<RankedTensorType>().getElementType());
+
+  build(builder, state, outputType, input, lower, upper);
+}
+
+static mlir::LogicalResult verify(TensorSliceOp op) {
+  auto inputType = op.input().getType().dyn_cast<RankedTensorType>();
+
+  ArrayAttr lower = op.lower();
+  ArrayAttr upper = op.upper();
+
+  int64_t lowerSize = lower.size();
+  int64_t upperSize = upper.size();
+
+  if(inputType && lowerSize != inputType.getRank())
+    return op.emitError() << "Lower size should match input rank";
+
+  if(inputType && upperSize != inputType.getRank())
+    return op.emitError() << "Upper size should match input rank";
+
+  auto output = op.output().getType().dyn_cast<RankedTensorType>();
+  if(!output)
+    return op.emitError() << "Output type must be of RankedTensorType. Its shape can always be inferred from the attributes";
+
+  for(size_t i = 0; i < lower.size(); i++) {
+    if((upper.getValue()[i].cast<IntegerAttr>().getInt() - lower.getValue()[i].cast<IntegerAttr>().getInt()) != output.getShape()[i]) {
+      return op.emitError() << "Output has an invalid shape";
+    }
+  }
+
+  return mlir::success();
 }
 
 //===----------------------------------------------------------------------===//

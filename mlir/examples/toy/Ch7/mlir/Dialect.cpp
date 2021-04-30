@@ -411,8 +411,7 @@ void TensorSliceOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
     dimensions.push_back(upper.getValue()[i].cast<IntegerAttr>().getInt() - lower.getValue()[i].cast<IntegerAttr>().getInt());
   }
 
-  auto outputType = RankedTensorType::get(dimensions, input.getType().dyn_cast<RankedTensorType>().getElementType());
-
+  auto outputType = RankedTensorType::get(dimensions, input.getType().cast<TensorType>().getElementType());
   build(builder, state, outputType, input, lower, upper);
 }
 

@@ -404,6 +404,25 @@ private:
     // tensor literal.
     return mlir::DenseElementsAttr::get(dataType, llvm::makeArrayRef(data));
   }
+
+  mlir::ArrayAttr getI64ArrayAttr(LiteralExprAST &lit) {
+    // The attribute is a vector with a floating point value per element
+    // (number) in the array, see `collectData()` below for more details.
+    std::vector<int64_t> data;
+    data.reserve(std::accumulate(lit.getDims().begin(), lit.getDims().end(), 1, std::multiplies<int>()));
+    collectData(lit, data);
+
+    // The type of this attribute is tensor of 64-bit floating-point with the
+    // shape of the literal.
+    mlir::Type elementType = builder.getI64Type();
+    auto dataType = mlir::RankedTensorType::get(lit.getDims(), elementType);
+
+    // This is the actual attribute that holds the list of values for this
+    // tensor literal.
+
+    return builder.getI64ArrayAttr(llvm::makeArrayRef(data));
+  }
+
   mlir::DenseElementsAttr getConstantAttr(NumberExprAST &lit) {
     // The type of this attribute is tensor of 64-bit floating-point with no
     // shape.
@@ -474,7 +493,8 @@ private:
   ///  [ 1, 2, 3, 4 ]
   /// Individual numbers are represented as doubles.
   /// Attributes are the way MLIR attaches constant to operations.
-  void collectData(ExprAST &expr, std::vector<double> &data) {
+  template <typename number>
+  void collectData(ExprAST &expr, std::vector<number> &data) {
     if (auto *lit = dyn_cast<LiteralExprAST>(&expr)) {
       for (auto &value : lit->getValues())
         collectData(*value, data);
@@ -490,6 +510,31 @@ private:
   mlir::Value mlirGen(CallExprAST &call) {
     llvm::StringRef callee = call.getCallee();
     auto location = loc(call.loc());
+
+    if(callee == "slice") {
+      if(call.getArgs().size() != 3) {
+        emitError(location, "MLIR codegen encountered an error: toy.slice requires 3 arguments");
+        return nullptr;
+      }
+
+      auto lowerArg = *call.getArgs()[1];
+
+      if(lowerArg.getKind() != toy::ExprAST::Expr_Literal) {
+        emitError(location, "MLIR codegen encountered an error: toy.slice second parameter must be a literal expression");
+        return nullptr;
+      }
+
+      mlir::ArrayAttr lower = getI64ArrayAttr(cast<LiteralExprAST>(lowerArg));
+
+      auto upperArg = *call.getArgs()[2];
+      if(upperArg.getKind() != toy::ExprAST::Expr_Literal) {
+        emitError(location, "MLIR codegen encountered an error: toy.slice third parameter must be a literal expression");
+        return nullptr;
+      }
+      mlir::ArrayAttr upper = getI64ArrayAttr(cast<LiteralExprAST>(upperArg));
+
+      return builder.create<TensorSliceOp>(location, mlirGen(*call.getArgs()[0]), lower, upper);
+    }
 
     // Codegen the operands first.
     SmallVector<mlir::Value, 4> operands;

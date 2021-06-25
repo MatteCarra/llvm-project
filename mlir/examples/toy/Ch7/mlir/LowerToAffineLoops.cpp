@@ -86,7 +86,7 @@ static MemRefType convertTensorToMemRef(TensorType type) {
 
 
   auto map = AffineMap::get(type.getRank(), 0, { firstDim }, context);
-  return MemRefType::get(type.getShape(), type.getElementType(), map);
+  return MemRefType::get(type.getShape(), type.getElementType());
 }
 
 /// Insert an allocation and deallocation for the given MemRefType.

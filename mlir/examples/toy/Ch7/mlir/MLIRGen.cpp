@@ -517,21 +517,21 @@ private:
         return nullptr;
       }
 
-      auto lowerArg = *call.getArgs()[1];
+      auto& lowerArg = call.getArgs()[1];
 
-      if(lowerArg.getKind() != toy::ExprAST::Expr_Literal) {
+      if(lowerArg->getKind() != toy::ExprAST::Expr_Literal) {
         emitError(location, "MLIR codegen encountered an error: toy.slice second parameter must be a literal expression");
         return nullptr;
       }
 
-      mlir::ArrayAttr lower = getI64ArrayAttr(cast<LiteralExprAST>(lowerArg));
+      mlir::ArrayAttr lower = getI64ArrayAttr(cast<LiteralExprAST>(*lowerArg));
 
-      auto upperArg = *call.getArgs()[2];
-      if(upperArg.getKind() != toy::ExprAST::Expr_Literal) {
+      auto& upperArg = call.getArgs()[2];
+      if(upperArg->getKind() != toy::ExprAST::Expr_Literal) {
         emitError(location, "MLIR codegen encountered an error: toy.slice third parameter must be a literal expression");
         return nullptr;
       }
-      mlir::ArrayAttr upper = getI64ArrayAttr(cast<LiteralExprAST>(upperArg));
+      mlir::ArrayAttr upper = getI64ArrayAttr(cast<LiteralExprAST>(*upperArg));
 
       return builder.create<TensorSliceOp>(location, mlirGen(*call.getArgs()[0]), lower, upper);
     }

@@ -173,6 +173,20 @@ bool types::isAcceptedByFlang(ID Id) {
   }
 }
 
+
+bool types::isAcceptedByMarco(ID Id) {
+  switch (Id) {
+  default:
+    return false;
+
+  case TY_Modelica:
+    return true;
+  case TY_LLVM_IR:
+  case TY_LLVM_BC:
+    return true;
+  }
+}
+
 bool types::isDerivedFromC(ID Id) {
   switch (Id) {
   default:

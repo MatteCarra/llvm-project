@@ -69,6 +69,8 @@ namespace types {
   /// isAcceptedByFlang - Can flang handle this input type.
   bool isAcceptedByFlang(ID Id);
 
+  bool isAcceptedByMarco(ID Id);
+
   /// isDerivedFromC - Is the input derived from C.
   ///
   /// That is, does the lexer follow the rules of

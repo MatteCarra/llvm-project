@@ -160,6 +160,7 @@ private:
   mutable std::unique_ptr<Tool> LinkerWrapper;
 
   Tool *getClang() const;
+  Tool *getMarco() const;
   Tool *getFlang() const;
   Tool *getAssemble() const;
   Tool *getLink() const;

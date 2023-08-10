@@ -83,6 +83,7 @@ class Driver {
     CPPMode,
     CLMode,
     FlangMode,
+    MarcoMode,
     DXCMode
   } Mode;
 
@@ -222,6 +223,8 @@ public:
   /// Whether the driver should invoke flang for fortran inputs.
   /// Other modes fall back to calling gcc which in turn calls gfortran.
   bool IsFlangMode() const { return Mode == FlangMode; }
+
+  bool isMarcoMode() const { return Mode == MarcoMode; }
 
   /// Whether the driver should follow dxc.exe like behavior.
   bool IsDXCMode() const { return Mode == DXCMode; }
@@ -649,6 +652,10 @@ public:
   /// ShouldUseFlangCompiler - Should the flang compiler be used to
   /// handle this action.
   bool ShouldUseFlangCompiler(const JobAction &JA) const;
+
+  /// ShouldUseMarcoCompiler - Should the marco compiler be used to
+  /// handle this action.
+  bool ShouldUseMarcoCompiler(const JobAction &JA) const;
 
   /// ShouldEmitStaticLibrary - Should the linker emit a static library.
   bool ShouldEmitStaticLibrary(const llvm::opt::ArgList &Args) const;

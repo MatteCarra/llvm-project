@@ -75,6 +75,9 @@ def FlangOnlyOption : OptionFlag;
 // FC1Option - This option should be accepted by flang -fc1.
 def FC1Option : OptionFlag;
 
+// MC1Option - This option should be accepted by clang -mc1.
+def MC1Option : OptionFlag;
+
 // A short name to show in documentation. The name will be interpreted as rST.
 class DocName<string name> { string DocName = name; }
 
@@ -239,6 +242,19 @@ def clang_ignored_m_Group : OptionGroup<"<clang ignored m group>">,
 def clang_ignored_legacy_options_Group : OptionGroup<"<clang legacy flags>">,
   Group<f_Group>, Flags<[Ignored]>;
 
+// Group for Marco
+def IDA_Group : OptionGroup<"IDA">,
+    DocName<"IDA">,
+    DocBrief<[{Flags controlling the IDA solver.}]>;
+
+def MarcoCodegen_Group : OptionGroup<"Code generation">,
+    DocName<"Code generation">,
+    DocBrief<[{Flags controlling the code generation and lowering processes.}]>;
+
+def Simulation_Group : OptionGroup<"Simulation">,
+    DocName<"Simulation">,
+    DocBrief<[{Flags controlling the simulation options.}]>;
+
 // Retired with clang-5.0
 def : Flag<["-"], "fslp-vectorize-aggressive">, Group<clang_ignored_legacy_options_Group>;
 def : Flag<["-"], "fno-slp-vectorize-aggressive">, Group<clang_ignored_legacy_options_Group>;
@@ -265,6 +281,8 @@ class TargetOpts<string base>
   : KeyPathAndMacro<"TargetOpts->", base, "TARGET_"> {}
 class FrontendOpts<string base>
   : KeyPathAndMacro<"FrontendOpts.", base, "FRONTEND_"> {}
+class MarcoCodegenOpts<string base>
+    : KeyPathAndMacro<"MarcoCodegenOpts.", base, "MARCO_CODEGEN_"> {}
 class PreprocessorOutputOpts<string base>
   : KeyPathAndMacro<"PreprocessorOutputOpts.", base, "PREPROCESSOR_OUTPUT_"> {}
 class DependencyOutputOpts<string base>
@@ -740,7 +758,20 @@ def ObjCXX : Flag<["-"], "ObjC++">, Flags<[NoXarchOption]>,
 def ObjC : Flag<["-"], "ObjC">, Flags<[NoXarchOption]>,
   HelpText<"Treat source input files as Objective-C inputs">;
 def O : Joined<["-"], "O">, Group<O_Group>, Flags<[CC1Option,FC1Option]>;
-def O_flag : Flag<["-"], "O">, Flags<[CC1Option,FC1Option]>, Alias<O>, AliasArgs<["1"]>;
+
+def : Flags<[MC1Option]>, Alias<O>, AliasArgs<["0"]>,
+  HelpText<"Disable optimizations">;
+def O_flag : Flag<["-"], "O">, Flags<[CC1Option,FC1Option]>, Alias<O>, AliasArgs<["1"]>,
+  HelpText<"Optimize for speed">;
+def : Flags<[MC1Option]>, Alias<O>, AliasArgs<["2"]>,
+  HelpText<"Optimize for speed">;
+def : Flags<[MC1Option]>, Alias<O>, AliasArgs<["3"]>,
+  HelpText<"Optimize for speed">;
+def : Flags<[MC1Option]>, Alias<O>, AliasArgs<["s"]>,
+  HelpText<"Optimize for size">;
+def : Flags<[MC1Option]>, Alias<O>, AliasArgs<["z"]>,
+  HelpText<"Optimize for size">;
+
 def Ofast : Joined<["-"], "Ofast">, Group<O_Group>, Flags<[CC1Option]>;
 def P : Flag<["-"], "P">, Flags<[CC1Option,FlangOption,FC1Option]>, Group<Preprocessor_Group>,
   HelpText<"Disable linemarker output in -E mode">,
@@ -769,7 +800,7 @@ def Rpass_analysis_EQ : Joined<["-"], "Rpass-analysis=">, Group<R_value_Group>,
            "name matches the given POSIX regular expression">;
 def R_Joined : Joined<["-"], "R">, Group<R_Group>, Flags<[CC1Option, CoreOption]>,
   MetaVarName<"<remark>">, HelpText<"Enable the specified remark">;
-def S : Flag<["-"], "S">, Flags<[NoXarchOption,CC1Option,FlangOption,FC1Option]>, Group<Action_Group>,
+def S : Flag<["-"], "S">, Flags<[NoXarchOption,CC1Option,FlangOption,FC1Option,MC1Option]>, Group<Action_Group>,
   HelpText<"Only run preprocess and compilation steps">;
 def T : JoinedOrSeparate<["-"], "T">, Group<T_Group>,
   MetaVarName<"<script>">, HelpText<"Specify <script> as linker script">;
@@ -921,7 +952,7 @@ def current__version : JoinedOrSeparate<["-"], "current_version">;
 def cxx_isystem : JoinedOrSeparate<["-"], "cxx-isystem">, Group<clang_i_Group>,
   HelpText<"Add directory to the C++ SYSTEM include search path">, Flags<[CC1Option]>,
   MetaVarName<"<directory>">;
-def c : Flag<["-"], "c">, Flags<[NoXarchOption, FlangOption]>, Group<Action_Group>,
+def c : Flag<["-"], "c">, Flags<[NoXarchOption, FlangOption, MC1Option]>, Group<Action_Group>,
   HelpText<"Only run preprocess, compile, and assemble steps">;
 def fconvergent_functions : Flag<["-"], "fconvergent-functions">, Group<f_Group>, Flags<[CC1Option]>,
   HelpText<"Assume functions may be convergent">;
@@ -3261,7 +3292,7 @@ def gno_embed_source : Flag<["-"], "gno-embed-source">, Group<g_flags_Group>,
     Flags<[NoXarchOption]>,
     HelpText<"Restore the default behavior of not embedding source text in DWARF debug sections">;
 def headerpad__max__install__names : Joined<["-"], "headerpad_max_install_names">;
-def help : Flag<["-", "--"], "help">, Flags<[CC1Option,CC1AsOption, FC1Option,
+def help : Flag<["-", "--"], "help">, Flags<[CC1Option,CC1AsOption, FC1Option, MC1Option,
     FlangOption]>, HelpText<"Display available options">,
     MarshallingInfoFlag<FrontendOpts<"ShowHelp">>;
 def ibuiltininc : Flag<["-"], "ibuiltininc">,
@@ -4080,7 +4111,7 @@ def nostdlib : Flag<["-"], "nostdlib">, Group<Link_Group>;
 def nostdlibxx : Flag<["-"], "nostdlib++">;
 def object : Flag<["-"], "object">;
 def o : JoinedOrSeparate<["-"], "o">, Flags<[NoXarchOption,
-  CC1Option, CC1AsOption, FC1Option, FlangOption]>,
+  CC1Option, CC1AsOption, FC1Option, FlangOption, MC1Option]>,
   HelpText<"Write output to <file>">, MetaVarName<"<file>">,
   MarshallingInfoString<FrontendOpts<"OutputFile">>;
 def object_file_name_EQ : Joined<["-"], "object-file-name=">, Flags<[CC1Option, CC1AsOption, CoreOption]>,
@@ -4242,7 +4273,7 @@ def no_system_header_prefix : Joined<["--"], "no-system-header-prefix=">,
            "system header.">;
 def : Separate<["--"], "no-system-header-prefix">, Alias<no_system_header_prefix>;
 def s : Flag<["-"], "s">, Group<Link_Group>;
-def target : Joined<["--"], "target=">, Flags<[NoXarchOption, CoreOption, FlangOption]>,
+def target : Joined<["--"], "target=">, Flags<[NoXarchOption, CoreOption, FlangOption, MC1Option]>,
   HelpText<"Generate code for the given target">;
 def darwin_target_variant : Separate<["-"], "darwin-target-variant">,
   Flags<[NoXarchOption, CoreOption]>,
@@ -6044,7 +6075,7 @@ def aligned_alloc_unavailable : Flag<["-"], "faligned-alloc-unavailable">,
 
 def version : Flag<["-"], "version">,
   HelpText<"Print the compiler version">,
-  Flags<[CC1Option, CC1AsOption, FC1Option, NoDriverOption]>,
+  Flags<[CC1Option, CC1AsOption, FC1Option, NoDriverOption, MC1Option]>,
   MarshallingInfoFlag<FrontendOpts<"ShowVersion">>;
 
 def main_file_name : Separate<["-"], "main-file-name">,
@@ -7034,3 +7065,163 @@ def dxc_entrypoint : Option<["--", "/", "-"], "E", KIND_JOINED_OR_SEPARATE>,
                      Group<dxc_Group>,
                      Flags<[DXCOption, NoXarchOption]>,
                      HelpText<"Entry point name">;
+
+
+//Marco
+def print_statistics : Flag<["--"], "print-statistics">,
+    Flags<[MC1Option]>,
+    HelpText<"Print statistics">;
+
+def omc_path : Joined<["--"], "omc-path=">,
+    Flags<[MC1Option]>,
+    HelpText<"Set a custom path for the OpenModelica compiler">;
+
+def omc_arg : Joined<["--"], "Xomc=">,
+    Flags<[MC1Option]>,
+    HelpText<"Pass a custom argument to the OpenModelica compiler (the option can be used multiple times)">;
+
+def omc_bypass : Flag<["--"], "omc-bypass">,
+    Flags<[MC1Option]>,
+    HelpText<"Bypass OMC and pass the source directly to MARCO">;
+
+defm assertions : BoolOption<"", "assertions",
+    MarcoCodegenOpts<"Assertions">,
+    DefaultTrue,
+    PosFlag<SetTrue, [], "Generate">,
+    NegFlag<SetFalse, [], "Don't generate">,
+    BothFlags<[MC1Option], " assertions">>,
+    Group<MarcoCodegen_Group>;
+
+defm generate_main : BoolOption<"", "generate-main",
+    MarcoCodegenOpts<"GenerateMain">,
+    DefaultTrue,
+    PosFlag<SetTrue, [], "Generate">,
+    NegFlag<SetFalse, [], "Don't generate">,
+    BothFlags<[MC1Option], " the main function that starts the simulation">>,
+    Group<MarcoCodegen_Group>;
+
+def bit_width : Joined<["--"], "bit-width=">,
+    Flags<[MC1Option]>,
+    Group<MarcoCodegen_Group>,
+    HelpText<"Set the bit-width of the simulation data">;
+
+defm function_inlining : BoolOption<"", "inlining",
+    MarcoCodegenOpts<"Inlining">,
+    DefaultFalse,
+    PosFlag<SetTrue, [], "Inline functions when suggested by the annotations">,
+    NegFlag<SetFalse, [], "Never inline functions">,
+    BothFlags<[MC1Option], "">>,
+    Group<MarcoCodegen_Group>;
+
+defm output_arrays_promotion : BoolOption<"", "output-arrays-promotion",
+    MarcoCodegenOpts<"OutputArraysPromotion">,
+    DefaultFalse,
+    PosFlag<SetTrue, [], "Convert">,
+    NegFlag<SetFalse, [], "Don't convert">,
+    BothFlags<[MC1Option], " output arrays into arguments to delegate the allocation to the caller">>,
+    Group<MarcoCodegen_Group>;
+
+defm read_only_variables_propagation : BoolOption<"", "read-only-variables-propagation",
+    MarcoCodegenOpts<"ParametersPropagation">,
+    DefaultTrue,
+    PosFlag<SetTrue, [], "Propagate">,
+    NegFlag<SetFalse, [], "Don't propagate">,
+    BothFlags<[MC1Option], " the values assigned to read-only variables through binding equations">>,
+    Group<MarcoCodegen_Group>;
+
+defm variables_to_parameters_promotion : BoolOption<"", "variables-to-parameters-promotion",
+    MarcoCodegenOpts<"VariablesToParametersPromotion">,
+    DefaultTrue,
+    PosFlag<SetTrue, [], "Promote">,
+    NegFlag<SetFalse, [], "Don't promote">,
+    BothFlags<[MC1Option], " variables to parameters when depending only on constants or parameters">>,
+    Group<MarcoCodegen_Group>;
+
+defm cse : BoolOption<"", "cse",
+    MarcoCodegenOpts<"CSE">,
+    DefaultFalse,
+    PosFlag<SetTrue, [], "Enable">,
+    NegFlag<SetFalse, [], "Disable">,
+    BothFlags<[MC1Option], " common subexpression elimination">>,
+    Group<MarcoCodegen_Group>;
+
+defm omp : BoolOption<"", "omp",
+    MarcoCodegenOpts<"OpenMP">,
+    DefaultFalse,
+    PosFlag<SetTrue, [], "Enable OpenMP usage (experimental)">,
+    NegFlag<SetFalse, [], "Disable OpenMP usage">,
+    BothFlags<[MC1Option], "">>,
+    Group<MarcoCodegen_Group>;
+
+def model : Joined<["--"], "model=">,
+    Group<Simulation_Group>,
+    Flags<[MC1Option]>,
+    HelpText<"Model name">;
+
+def filter : Joined<["--"], "variable-filter=">,
+    Group<Simulation_Group>,
+    Flags<[MC1Option]>,
+    HelpText<"Filter for the variables to be printed">;
+
+def solver : Joined<["--"], "solver=">,
+    Group<Simulation_Group>,
+    Flags<[MC1Option]>,
+    HelpText<"Solver (possible options: euler-forward, ida)">;
+
+defm ida_reduced_system : BoolOption<"", "ida-reduced-system",
+    MarcoCodegenOpts<"IDA">,
+    DefaultTrue,
+    PosFlag<SetTrue, [], "IDA: compute a reduced system for the external solver">,
+    NegFlag<SetFalse, [], "IDA: all variables and equations are passed to the external solver">,
+    BothFlags<[MC1Option], "">>,
+    Group<Simulation_Group>;
+
+defm ida_reduced_derivatives : BoolOption<"", "ida-reduced-derivatives",
+    MarcoCodegenOpts<"IDA">,
+    DefaultTrue,
+    PosFlag<SetTrue, [], "IDA: determine the derivatives that are always equal to zero">,
+    NegFlag<SetFalse, [], "IDA: do not determine the derivatives that are always equal to zero">,
+    BothFlags<[MC1Option], "">>,
+    Group<Simulation_Group>;
+
+defm ida_jacobian_one_sweep : BoolOption<"", "ida-jacobian-one-sweep",
+    MarcoCodegenOpts<"IDA">,
+    DefaultTrue,
+    PosFlag<SetTrue, [], "IDA: enable one-sweep computation of derivatives with respect to state and derivative variables">,
+    NegFlag<SetFalse, [], "IDA: disable one-sweep computation of derivatives with respect to state and derivative variables">,
+    BothFlags<[MC1Option], "">>,
+    Group<Simulation_Group>;
+
+//===----------------------------------------------------------------------===//
+// Frontend Options - mc1
+//===----------------------------------------------------------------------===//
+
+def emit_flattened : Flag<["--"], "emit-flattened">,
+    Flags<[MC1Option]>,
+    Group<Action_Group>,
+    HelpText<"Emit flattened Modelica">;
+
+def emit_ast_marco : Flag<["--"], "emit-ast">,
+    Flags<[MC1Option]>,
+    Group<Action_Group>,
+    HelpText<"Emit AST">;
+
+def emit_final_ast_marco : Flag<["--"], "emit-final-ast">,
+    Flags<[MC1Option]>,
+    Group<Action_Group>,
+    HelpText<"Emit the final AST, after the frontend passes">;
+
+def emit_mlir_marco : Flag<["--"], "emit-mlir">,
+    Flags<[MC1Option]>,
+    Group<Action_Group>,
+    HelpText<"Emit MLIR">;
+
+def emit_llvm_ir : Flag<["--"], "emit-llvm-ir">,
+    Flags<[MC1Option]>,
+    Group<Action_Group>,
+    HelpText<"Emit LLVM-IR">;
+
+def emit_llvm_bitcode : Flag<["--"], "emit-llvm-bc">,
+    Flags<[MC1Option]>,
+    Group<Action_Group>,
+    HelpText<"Emit LLVM bitcode">;

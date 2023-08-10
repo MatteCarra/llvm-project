@@ -236,6 +236,7 @@ void Driver::setDriverMode(StringRef Value) {
                    .Case("cpp", CPPMode)
                    .Case("cl", CLMode)
                    .Case("flang", FlangMode)
+                   .Case("marco", MarcoMode)
                    .Case("dxc", DXCMode)
                    .Default(None))
     Mode = *M;
@@ -6137,6 +6138,20 @@ bool Driver::ShouldUseFlangCompiler(const JobAction &JA) const {
   return true;
 }
 
+bool Driver::ShouldUseMarcoCompiler(const JobAction &JA) const {
+  // Say "no" if there is not exactly one input of a type flang understands.
+  if (JA.size() != 1 ||
+      !types::isAcceptedByMarco((*JA.input_begin())->getType()))
+    return false;
+
+  // And say "no" if this is not a kind of action marco understands.
+  //TODO
+  if (!isa<PreprocessJobAction>(JA) && !isa<CompileJobAction>(JA) && !isa<BackendJobAction>(JA))
+    return false;
+
+  return true;
+}
+
 bool Driver::ShouldEmitStaticLibrary(const ArgList &Args) const {
   // Only emit static library if the flag is set explicitly.
   if (Args.hasArg(options::OPT_emit_static_lib))
@@ -6251,6 +6266,8 @@ const char *Driver::getExecutableForDriverMode(DriverMode Mode) {
     return "flang";
   case DXCMode:
     return "clang-dxc";
+  case MarcoMode:
+    return "marco";
   }
 
   llvm_unreachable("Unhandled Mode");

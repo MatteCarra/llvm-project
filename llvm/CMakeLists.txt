@@ -2,6 +2,8 @@
 
 cmake_minimum_required(VERSION 3.13.4)
 
+set(DLLVM_PARALLEL_LINK_JOBS 2)
+
 set(LLVM_COMMON_CMAKE_UTILS ${CMAKE_CURRENT_SOURCE_DIR}/../cmake)
 include(${LLVM_COMMON_CMAKE_UTILS}/Modules/CMakePolicy.cmake
   NO_POLICY_SCOPE)
@@ -124,6 +126,8 @@ set(LLVM_KNOWN_PROJECTS "${LLVM_ALL_PROJECTS};${LLVM_EXTRA_PROJECTS}")
 set(LLVM_ENABLE_PROJECTS "" CACHE STRING
     "Semicolon-separated list of projects to build (${LLVM_KNOWN_PROJECTS}), or \"all\".")
 # Make sure expansion happens first to not handle "all" in rest of the checks.
+
+set(LLVM_ENABLE_PROJECTS "clang;clang-tools-extra;mlir;openmp")
 if( LLVM_ENABLE_PROJECTS STREQUAL "all" )
   set( LLVM_ENABLE_PROJECTS ${LLVM_ALL_PROJECTS})
 endif()

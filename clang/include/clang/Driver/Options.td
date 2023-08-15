@@ -757,7 +757,7 @@ def ObjCXX : Flag<["-"], "ObjC++">, Flags<[NoXarchOption]>,
   HelpText<"Treat source input files as Objective-C++ inputs">;
 def ObjC : Flag<["-"], "ObjC">, Flags<[NoXarchOption]>,
   HelpText<"Treat source input files as Objective-C inputs">;
-def O : Joined<["-"], "O">, Group<O_Group>, Flags<[CC1Option,FC1Option]>;
+def O : Joined<["-"], "O">, Group<O_Group>, Flags<[CC1Option,FC1Option,MC1Option]>;
 
 def : Flags<[MC1Option]>, Alias<O>, AliasArgs<["0"]>,
   HelpText<"Disable optimizations">;
@@ -1137,7 +1137,7 @@ def d_Flag : Flag<["-"], "d">, Group<d_Group>;
 def d_Joined : Joined<["-"], "d">, Group<d_Group>;
 def emit_ast : Flag<["-"], "emit-ast">, Flags<[CoreOption]>,
   HelpText<"Emit Clang AST files for source inputs">;
-def emit_llvm : Flag<["-"], "emit-llvm">, Flags<[CC1Option, FC1Option, FlangOption]>, Group<Action_Group>,
+def emit_llvm : Flag<["-"], "emit-llvm">, Flags<[CC1Option, FC1Option, FlangOption, MC1Option]>, Group<Action_Group>,
   HelpText<"Use the LLVM representation for assembler and object files">;
 def emit_interface_stubs : Flag<["-"], "emit-interface-stubs">, Flags<[CC1Option]>, Group<Action_Group>,
   HelpText<"Generate Interface Stub Files.">;
@@ -5033,6 +5033,11 @@ def J : JoinedOrSeparate<["-"], "J">,
   Group<gfortran_Group>,
   Alias<module_dir>;
 
+
+def emit_mlir : Flag<["-"], "emit-mlir">, Group<Action_Group>,
+  Flags<[FC1Option, FlangOnlyOption,MC1Option]>,
+  HelpText<"Build the parse tree, then lower it to MLIR">;
+
 //===----------------------------------------------------------------------===//
 // FC1 Options
 //===----------------------------------------------------------------------===//
@@ -5087,10 +5092,7 @@ def fno_reformat : Flag<["-"], "fno-reformat">, Group<Preprocessor_Group>,
   HelpText<"Dump the cooked character stream in -E mode">;
 defm analyzed_objects_for_unparse : OptOutFC1FFlag<"analyzed-objects-for-unparse", "", "Do not use the analyzed objects when unparsing">;
 
-def emit_mlir : Flag<["-"], "emit-mlir">, Group<Action_Group>,
-  HelpText<"Build the parse tree, then lower it to MLIR">;
 def emit_fir : Flag<["-"], "emit-fir">, Alias<emit_mlir>;
-
 } // let Flags = [FC1Option, FlangOnlyOption]
 
 //===----------------------------------------------------------------------===//
@@ -7196,32 +7198,12 @@ defm ida_jacobian_one_sweep : BoolOption<"", "ida-jacobian-one-sweep",
 // Frontend Options - mc1
 //===----------------------------------------------------------------------===//
 
-def emit_flattened : Flag<["--"], "emit-flattened">,
+def emit_modelica_flattened : Flag<["--"], "emit-flattened">,
     Flags<[MC1Option]>,
     Group<Action_Group>,
     HelpText<"Emit flattened Modelica">;
 
-def emit_ast_marco : Flag<["--"], "emit-ast">,
-    Flags<[MC1Option]>,
-    Group<Action_Group>,
-    HelpText<"Emit AST">;
-
-def emit_final_ast_marco : Flag<["--"], "emit-final-ast">,
+def emit_final_ast : Flag<["--"], "emit-final-ast">,
     Flags<[MC1Option]>,
     Group<Action_Group>,
     HelpText<"Emit the final AST, after the frontend passes">;
-
-def emit_mlir_marco : Flag<["--"], "emit-mlir">,
-    Flags<[MC1Option]>,
-    Group<Action_Group>,
-    HelpText<"Emit MLIR">;
-
-def emit_llvm_ir : Flag<["--"], "emit-llvm-ir">,
-    Flags<[MC1Option]>,
-    Group<Action_Group>,
-    HelpText<"Emit LLVM-IR">;
-
-def emit_llvm_bitcode : Flag<["--"], "emit-llvm-bc">,
-    Flags<[MC1Option]>,
-    Group<Action_Group>,
-    HelpText<"Emit LLVM bitcode">;

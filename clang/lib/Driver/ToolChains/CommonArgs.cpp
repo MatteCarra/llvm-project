@@ -838,6 +838,35 @@ void tools::addFortranRuntimeLibraryPath(const ToolChain &TC,
     CmdArgs.push_back(Args.MakeArgString("-L" + DefaultLibPath));
 }
 
+void tools::addMarcoLinkerArgs(const ToolChain &TC,
+                                  const llvm::opt::ArgList &Args,
+                                  llvm::opt::ArgStringList &CmdArgs) {
+    if(!Args.hasArg(options::OPT_no_generate_main)) {
+      CmdArgs.push_back("-lMARCORuntimeStarter");
+    }
+
+    CmdArgs.push_back("-lMARCORuntimeSimulation");
+
+    const auto& solver = Args.getLastArgValue(options::OPT_solver);
+    if (solver == "euler-forward") {
+        CmdArgs.push_back("-lMARCORuntimeDriverEulerForward");
+        CmdArgs.push_back("-lMARCORuntimeSolverEulerForward");
+    } else if (solver == "ida") {
+        CmdArgs.push_back("-lMARCORuntimeDriverIDA");
+        CmdArgs.push_back("-lMARCORuntimeSolverIDA");
+    } else {
+      assert(false && "Unexpected solver type for Marco tool.");
+    }
+      // Add the remaining runtime libraries.
+    CmdArgs.push_back("-lMARCORuntimeSolverKINSOL");
+    CmdArgs.push_back("-lMARCORuntimePrinterCSV");
+    CmdArgs.push_back("-lMARCORuntimeSupport");
+    CmdArgs.push_back("-lMARCORuntimeCLI");
+    CmdArgs.push_back("-lMARCORuntimeModeling");
+    CmdArgs.push_back("-lMARCORuntimeMultithreading");
+    CmdArgs.push_back("-lMARCORuntimeProfiling");
+}
+
 static void addSanitizerRuntime(const ToolChain &TC, const ArgList &Args,
                                 ArgStringList &CmdArgs, StringRef Sanitizer,
                                 bool IsShared, bool IsWhole) {

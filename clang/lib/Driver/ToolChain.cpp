@@ -11,6 +11,7 @@
 #include "ToolChains/Clang.h"
 #include "ToolChains/Flang.h"
 #include "ToolChains/InterfaceStubs.h"
+#include "ToolChains/Marco.h"
 #include "clang/Basic/ObjCRuntime.h"
 #include "clang/Basic/Sanitizers.h"
 #include "clang/Config/config.h"
@@ -182,6 +183,7 @@ static const DriverSuffix *FindDriverSuffix(StringRef ProgName, size_t &Pos) {
       {"cl", "--driver-mode=cl"},
       {"++", "--driver-mode=g++"},
       {"flang", "--driver-mode=flang"},
+      {"marco", "--driver-mode=marco"},
       {"clang-dxc", "--driver-mode=dxc"},
   };
 
@@ -312,8 +314,9 @@ Tool *ToolChain::getFlang() const {
 }
 
 Tool *ToolChain::getMarco() const {
-  //TODO
-  return nullptr;
+  if(!Marco)
+    Marco.reset(new tools::Marco(*this));
+  return Marco.get();
 }
 
 Tool *ToolChain::buildAssembler() const {

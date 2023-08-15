@@ -29,32 +29,8 @@ private:
   ///
   /// \param [in] Args The list of input driver arguments
   /// \param [out] CmdArgs The list of output command arguments
-  void addMarcoDialectOptions(const llvm::opt::ArgList &Args,
+  void addMarcoOptions(const llvm::opt::ArgList &Args,
                                 llvm::opt::ArgStringList &CmdArgs) const;
-
-  /// Extract preprocessing options from the driver arguments and add them to
-  /// the preprocessor command arguments.
-  ///
-  /// \param [in] Args The list of input driver arguments
-  /// \param [out] CmdArgs The list of output command arguments
-  void addPreprocessingOptions(const llvm::opt::ArgList &Args,
-                               llvm::opt::ArgStringList &CmdArgs) const;
-
-  /// Extract PIC options from the driver arguments and add them to
-  /// the command arguments.
-  ///
-  /// \param [in] Args The list of input driver arguments
-  /// \param [out] CmdArgs The list of output command arguments
-  void addPicOptions(const llvm::opt::ArgList &Args,
-                     llvm::opt::ArgStringList &CmdArgs) const;
-
-  /// Extract other compilation options from the driver arguments and add them
-  /// to the command arguments.
-  ///
-  /// \param [in] Args The list of input driver arguments
-  /// \param [out] CmdArgs The list of output command arguments
-  void addOtherOptions(const llvm::opt::ArgList &Args,
-                       llvm::opt::ArgStringList &CmdArgs) const;
 
 public:
   Marco(const ToolChain &TC);

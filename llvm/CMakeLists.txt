@@ -127,7 +127,7 @@ set(LLVM_ENABLE_PROJECTS "" CACHE STRING
     "Semicolon-separated list of projects to build (${LLVM_KNOWN_PROJECTS}), or \"all\".")
 # Make sure expansion happens first to not handle "all" in rest of the checks.
 
-set(LLVM_ENABLE_PROJECTS "clang;clang-tools-extra;mlir;openmp")
+set(LLVM_ENABLE_PROJECTS "clang;clang-tools-extra;mlir;openmp;flang")
 if( LLVM_ENABLE_PROJECTS STREQUAL "all" )
   set( LLVM_ENABLE_PROJECTS ${LLVM_ALL_PROJECTS})
 endif()

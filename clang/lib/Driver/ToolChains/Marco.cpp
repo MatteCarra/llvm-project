@@ -20,7 +20,8 @@ using namespace clang;
 using namespace llvm::opt;
 
 static void addDashXForInput(const ArgList &Args, const InputInfo &Input, ArgStringList &CmdArgs) {
-    //TODO
+    //TODO is this needed?
+    //CmdArgs.push_back(types::getTypeName(Input.getType()));
 }
 
 void Marco::addMarcoOptions(const ArgList &Args,
@@ -74,7 +75,7 @@ void Marco::ConstructJob(Compilation &C, const JobAction &JA,
   const Driver &D = TC.getDriver();
   ArgStringList CmdArgs;
 
-  // Invoke ourselves in -fc1 mode.
+  // Invoke ourselves in -mc1 mode.
   CmdArgs.push_back("-mc1");
 
   // Add the "effective" target triple.

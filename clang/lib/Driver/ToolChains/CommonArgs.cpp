@@ -841,24 +841,27 @@ void tools::addFortranRuntimeLibraryPath(const ToolChain &TC,
 void tools::addMarcoLinkerArgs(const ToolChain &TC,
                                   const llvm::opt::ArgList &Args,
                                   llvm::opt::ArgStringList &CmdArgs) {
+    /* These are from marco rework
     if(!Args.hasArg(options::OPT_no_generate_main)) {
       CmdArgs.push_back("-lMARCORuntimeStarter");
-    }
+    }*/
+    CmdArgs.push_back("-L/Users/matteo/Workspace/C++/marco-rework/build/lib");
+    CmdArgs.push_back("-L/opt/homebrew/Cellar/sundials/6.6.0/lib");
 
-    CmdArgs.push_back("-lMARCORuntimeSimulation");
+    CmdArgs.push_back("-lMARCORuntime");
 
     const auto& solver = Args.getLastArgValue(options::OPT_solver);
     if (solver == "euler-forward") {
+        CmdArgs.push_back("-lMARCORuntimeSolversEulerForward");
         CmdArgs.push_back("-lMARCORuntimeDriverEulerForward");
-        CmdArgs.push_back("-lMARCORuntimeSolverEulerForward");
     } else if (solver == "ida") {
+        CmdArgs.push_back("-lMARCORuntimeSolversIDA");
         CmdArgs.push_back("-lMARCORuntimeDriverIDA");
-        CmdArgs.push_back("-lMARCORuntimeSolverIDA");
     } else {
       assert(false && "Unexpected solver type for Marco tool.");
     }
       // Add the remaining runtime libraries.
-    CmdArgs.push_back("-lMARCORuntimeSolverKINSOL");
+    CmdArgs.push_back("-lMARCORuntimeDriverKINSOL");
     CmdArgs.push_back("-lMARCORuntimePrinterCSV");
     CmdArgs.push_back("-lMARCORuntimeSupport");
     CmdArgs.push_back("-lMARCORuntimeCLI");

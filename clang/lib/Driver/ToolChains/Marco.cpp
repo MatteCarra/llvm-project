@@ -13,6 +13,8 @@
 #include "clang/Driver/Options.h"
 
 #include <cassert>
+#include <iostream>
+#include <ostream>
 
 using namespace clang::driver;
 using namespace clang::driver::tools;
@@ -72,6 +74,8 @@ void Marco::ConstructJob(Compilation &C, const JobAction &JA,
   const llvm::Triple &Triple = TC.getEffectiveTriple();
   const std::string &TripleStr = Triple.getTriple();
 
+  std::cout << "Job " << TripleStr << std::endl;
+
   const Driver &D = TC.getDriver();
   ArgStringList CmdArgs;
 
@@ -83,7 +87,7 @@ void Marco::ConstructJob(Compilation &C, const JobAction &JA,
   //CmdArgs.push_back(Args.MakeArgString(TripleStr));
 
   //TODO how to handle mlir?
-  if (isa<CompileJobAction>(JA)) {
+  if (isa<CompileJobAction>(JA) || isa<BackendJobAction>(JA)) {
     if(JA.getType() == types::TY_Modelica) {
       if(Args.hasArg(options::OPT_emit_modelica_flattened)) {
         CmdArgs.push_back("-emit-flattened");
@@ -104,7 +108,7 @@ void Marco::ConstructJob(Compilation &C, const JobAction &JA,
       assert(false && "Unexpected output type!");
     }
   } else if (isa<AssembleJobAction>(JA)) {
-    //TODO what to do here?
+    CmdArgs.push_back("-emit-obj");
   } else {
     assert(false && "Unexpected action class for Marco tool.");
   }
@@ -151,6 +155,10 @@ void Marco::ConstructJob(Compilation &C, const JobAction &JA,
 
   const InputInfo &Input = Inputs[0];
   assert(Input.isFilename() && "Invalid input.");
+
+  for(auto& input : Inputs) {
+    std::cout << "Input " << input.getFilename() << "." << std::endl;
+  }
 
   CmdArgs.push_back(Input.getFilename());
 

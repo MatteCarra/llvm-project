@@ -6,6 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include <iostream>
 #include "clang/Driver/Driver.h"
 #include "ToolChains/AIX.h"
 #include "ToolChains/AMDGPU.h"

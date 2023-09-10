@@ -109,4 +109,4 @@ TYPE("hip-fatbin",               HIP_FATBIN,   INVALID,         "hipfb",  phases
 TYPE("api-information",          API_INFO,     INVALID,         "json",   phases::Precompile)
 TYPE("none",                     Nothing,      INVALID,         nullptr,  phases::Compile, phases::Backend, phases::Assemble, phases::Link)
 
-TYPE("modelica",                 Modelica,     INVALID,         nullptr,  phases::Compile, phases::Assemble, phases::Link)
+TYPE("modelica",                 Modelica,     INVALID,         nullptr,  phases::Compile, phases::Backend, phases::Assemble, phases::Link)

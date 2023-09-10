@@ -6437,7 +6437,7 @@ defm cuda_approx_transcendentals : BoolFOption<"cuda-approx-transcendentals",
 // Frontend Options - cc1 + fc1
 //===----------------------------------------------------------------------===//
 
-let Flags = [CC1Option, FC1Option, NoDriverOption] in {
+let Flags = [CC1Option, FC1Option, MC1Option, NoDriverOption] in {
 let Group = Action_Group in {
 
 def emit_obj : Flag<["-"], "emit-obj">,

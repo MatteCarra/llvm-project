@@ -841,77 +841,48 @@ void tools::addFortranRuntimeLibraryPath(const ToolChain &TC,
 void tools::addMarcoLinkerArgs(const ToolChain &TC,
                                   const llvm::opt::ArgList &Args,
                                   llvm::opt::ArgStringList &CmdArgs) {
-    /* These are from marco rework
-    if(!Args.hasArg(options::OPT_no_generate_main)) {
-      CmdArgs.push_back("-lMARCORuntimeStarter");
-    }*/
-    CmdArgs.push_back("-L/Users/matteo/Workspace/C++/marco/build/lib");
-    CmdArgs.push_back("-L/opt/homebrew/Cellar/sundials/6.6.0/lib");
+  auto solverString = Args.getLastArgValue(options::OPT_solver, "euler-forward");
 
-    CmdArgs.push_back("-lMARCORuntime");
+  CmdArgs.push_back("-rpath");
+  CmdArgs.push_back("/Users/matteo/Workspace/C++/marco-runtime-install/lib");
+  CmdArgs.push_back("-rpath");
+  CmdArgs.push_back("/Users/matteo/Workspace/C++/marco-runtime-install/dependencies/sundials/lib");
+  CmdArgs.push_back("-L/Users/matteo/Workspace/C++/marco-runtime-install/lib");
 
-    const auto& solver = Args.getLastArgValue(options::OPT_solver);
-    if (solver == "euler-forward") {
-        CmdArgs.push_back("-lMARCORuntimeSolversEulerForward");
-        CmdArgs.push_back("-lMARCORuntimeDriverEulerForward");
-    } else if (solver == "ida") {
-        CmdArgs.push_back("-lMARCORuntimeSolversIDA");
-        CmdArgs.push_back("-lMARCORuntimeDriverIDA");
-    } else {
-      assert(false && "Unexpected solver type for Marco tool.");
-    }
-      // Add the remaining runtime libraries.
-    CmdArgs.push_back("-lMARCORuntimeDriverKINSOL");
-    CmdArgs.push_back("-lMARCORuntimePrinterCSV");
-    CmdArgs.push_back("-lMARCORuntimeSupport");
-    CmdArgs.push_back("-lMARCORuntimeCLI");
-    CmdArgs.push_back("-lMARCORuntimeModeling");
-    CmdArgs.push_back("-lMARCORuntimeMultithreading");
-    CmdArgs.push_back("-lMARCORuntimeProfiling");
+  // Add the main function to the simulation, if not explicitly discarded.
+  if (!Args.hasArg(options::OPT_no_generate_main)) {
+    CmdArgs.push_back("-lMARCORuntimeStarter");
+  }
 
+  // Add the main simulation driver.
+  CmdArgs.push_back("-lMARCORuntimeSimulation");
 
-      auto solverString = Args.getLastArgValue(options::OPT_solver, "euler-forward");
+  // Add the libraries of the solver.
+  if (solverString == "euler-forward") {
+    CmdArgs.push_back("-lMARCORuntimeDriverEulerForward");
+    CmdArgs.push_back("-lMARCORuntimeSolverEulerForward");
+  } else if (solverString == "ida") {
+    CmdArgs.push_back("-lMARCORuntimeDriverIDA");
+    CmdArgs.push_back("-lMARCORuntimeSolverIDA");
+  }
 
-      CmdArgs.push_back("-rpath");
-      CmdArgs.push_back("/Users/matteo/Workspace/C++/marco-runtime-install/lib");
-      CmdArgs.push_back("-rpath");
-      CmdArgs.push_back("/Users/matteo/Workspace/C++/marco-runtime-install/dependencies/sundials/lib");
-      CmdArgs.push_back("-L/Users/matteo/Workspace/C++/marco-runtime-install/lib");
+  // Add the remaining runtime libraries.
+  CmdArgs.push_back("-lMARCORuntimeSolverKINSOL");
+  CmdArgs.push_back("-lMARCORuntimePrinterCSV");
+  CmdArgs.push_back("-lMARCORuntimeSupport");
+  CmdArgs.push_back("-lMARCORuntimeCLI");
+  CmdArgs.push_back("-lMARCORuntimeModeling");
+  CmdArgs.push_back("-lMARCORuntimeMultithreading");
+  CmdArgs.push_back("-lMARCORuntimeProfiling");
+  CmdArgs.push_back("-L/Users/matteo/Workspace/C++/marco-runtime-install/dependencies/sundials/lib");
 
-      // Add the main function to the simulation, if not explicitly discarded.
-      if (!Args.hasArg(options::OPT_no_generate_main)) {
-        CmdArgs.push_back("-lMARCORuntimeStarter");
-      }
-
-      // Add the main simulation driver.
-      CmdArgs.push_back("-lMARCORuntimeSimulation");
-
-      // Add the libraries of the solver.
-      if (solverString == "euler-forward") {
-        CmdArgs.push_back("-lMARCORuntimeDriverEulerForward");
-        CmdArgs.push_back("-lMARCORuntimeSolverEulerForward");
-      } else if (solverString == "ida") {
-        CmdArgs.push_back("-lMARCORuntimeDriverIDA");
-        CmdArgs.push_back("-lMARCORuntimeSolverIDA");
-      }
-
-      // Add the remaining runtime libraries.
-      CmdArgs.push_back("-lMARCORuntimeSolverKINSOL");
-      CmdArgs.push_back("-lMARCORuntimePrinterCSV");
-      CmdArgs.push_back("-lMARCORuntimeSupport");
-      CmdArgs.push_back("-lMARCORuntimeCLI");
-      CmdArgs.push_back("-lMARCORuntimeModeling");
-      CmdArgs.push_back("-lMARCORuntimeMultithreading");
-      CmdArgs.push_back("-lMARCORuntimeProfiling");
-      CmdArgs.push_back("-L/Users/matteo/Workspace/C++/marco-runtime-install/dependencies/sundials/lib");
-
-      if (solverString == "ida") {
-        CmdArgs.push_back("-lsundials_ida");
-        CmdArgs.push_back("-lsundials_kinsol");
-        CmdArgs.push_back("-lsundials_nvecserial");
-        CmdArgs.push_back("-lsundials_sunlinsolklu");
-        CmdArgs.push_back("-lklu");
-      }
+  if (solverString == "ida") {
+    CmdArgs.push_back("-lsundials_ida");
+    CmdArgs.push_back("-lsundials_kinsol");
+    CmdArgs.push_back("-lsundials_nvecserial");
+    CmdArgs.push_back("-lsundials_sunlinsolklu");
+    CmdArgs.push_back("-lklu");
+  }
 }
 
 static void addSanitizerRuntime(const ToolChain &TC, const ArgList &Args,

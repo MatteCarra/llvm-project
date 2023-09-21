@@ -980,10 +980,11 @@ void tools::addMarcoLinkerArgs(const ToolChain &TC,
   auto solverString = Args.getLastArgValue(options::OPT_solver, "euler-forward");
 
   CmdArgs.push_back("-rpath");
-  CmdArgs.push_back("/Users/matteo/Workspace/C++/marco-runtime-install/lib");
+  CmdArgs.push_back("/home/matteo/Workspace/C++/marco-runtime-install/lib");
   CmdArgs.push_back("-rpath");
-  CmdArgs.push_back("/Users/matteo/Workspace/C++/marco-runtime-install/dependencies/sundials/lib");
-  CmdArgs.push_back("-L/Users/matteo/Workspace/C++/marco-runtime-install/lib");
+  CmdArgs.push_back("/home/matteo/Workspace/C++/marco-runtime-install/dependencies/sundials/lib");
+  CmdArgs.push_back("-L/home/matteo/Workspace/C++/marco-runtime-install/lib");
+  CmdArgs.push_back("-L/home/matteo/Workspace/C++/marco-runtime-install/dependencies/sundials/lib");
 
   // Add the main function to the simulation, if not explicitly discarded.
   if (!Args.hasArg(options::OPT_no_generate_main)) {
@@ -1010,7 +1011,6 @@ void tools::addMarcoLinkerArgs(const ToolChain &TC,
   CmdArgs.push_back("-lMARCORuntimeModeling");
   CmdArgs.push_back("-lMARCORuntimeMultithreading");
   CmdArgs.push_back("-lMARCORuntimeProfiling");
-  CmdArgs.push_back("-L/Users/matteo/Workspace/C++/marco-runtime-install/dependencies/sundials/lib");
 
   if (solverString == "ida") {
     CmdArgs.push_back("-lsundials_ida");
@@ -1019,6 +1019,8 @@ void tools::addMarcoLinkerArgs(const ToolChain &TC,
     CmdArgs.push_back("-lsundials_sunlinsolklu");
     CmdArgs.push_back("-lklu");
   }
+
+  TC.AddCXXStdlibLibArgs(Args, CmdArgs);
 }
 
 static void addSanitizerRuntime(const ToolChain &TC, const ArgList &Args,

@@ -1201,7 +1201,7 @@ void ToolChain::AddClangCXXStdlibIsystemArgs(
 }
 
 bool ToolChain::ShouldLinkCXXStdlib(const llvm::opt::ArgList &Args) const {
-  return (getDriver().CCCIsCXX() || getDriver().isMarcoMode()) &&
+  return getDriver().CCCIsCXX() &&
          !Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs,
                       options::OPT_nostdlibxx);
 }

@@ -7620,7 +7620,7 @@ def : Flag<["-"], "fno-cuda-approx-transcendentals">, Alias<fno_gpu_approx_trans
 // Frontend Options - cc1 + fc1
 //===----------------------------------------------------------------------===//
 
-let Visibility = [CC1Option, FC1Option, MarcoOption, MC1Option] in {
+let Visibility = [CC1Option, FC1Option, MC1Option] in {
 let Group = Action_Group in {
 
 def emit_obj : Flag<["-"], "emit-obj">,

@@ -19,10 +19,11 @@
 // FIXME: Is it easiest to fix this layering violation by moving the .inc
 // #includes from AArch64MCTargetDesc.h to here?
 #include "MCTargetDesc/AArch64MCTargetDesc.h" // For AArch64::X0 and friends.
+#include "llvm/ADT/BitmaskEnum.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringSwitch.h"
-#include "llvm/MC/SubtargetFeature.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/TargetParser/SubtargetFeature.h"
 
 namespace llvm {
 
@@ -332,40 +333,6 @@ inline static unsigned getNZCVToSatisfyCondCode(CondCode Code) {
   }
 }
 
-/// Return true if Code is a reflexive relationship:
-/// forall x. (CSET Code (CMP x x)) == 1
-inline static bool isReflexive(CondCode Code) {
-  switch (Code) {
-  case EQ:
-  case HS:
-  case PL:
-  case LS:
-  case GE:
-  case LE:
-  case AL:
-  case NV:
-    return true;
-  default:
-    return false;
-  }
-}
-
-/// Return true if Code is an irreflexive relationship:
-/// forall x. (CSET Code (CMP x x)) == 0
-inline static bool isIrreflexive(CondCode Code) {
-  switch (Code) {
-  case NE:
-  case LO:
-  case MI:
-  case HI:
-  case LT:
-  case GT:
-    return true;
-  default:
-    return false;
-  }
-}
-
 } // end namespace AArch64CC
 
 struct SysAlias {
@@ -481,6 +448,14 @@ namespace AArch64SVEPRFM {
 #include "AArch64GenSystemOperands.inc"
 }
 
+namespace AArch64RPRFM {
+struct RPRFM : SysAlias {
+  using SysAlias::SysAlias;
+};
+#define GET_RPRFM_DECL
+#include "AArch64GenSystemOperands.inc"
+} // namespace AArch64RPRFM
+
 namespace AArch64SVEPredPattern {
   struct SVEPREDPAT {
     const char *Name;
@@ -528,11 +503,11 @@ inline unsigned getNumElementsFromSVEPredPattern(unsigned Pattern) {
 }
 
 /// Return specific VL predicate pattern based on the number of elements.
-inline Optional<unsigned>
+inline std::optional<unsigned>
 getSVEPredPatternFromNumElements(unsigned MinNumElts) {
   switch (MinNumElts) {
   default:
-    return None;
+    return std::nullopt;
   case 1:
   case 2:
   case 3:
@@ -555,6 +530,27 @@ getSVEPredPatternFromNumElements(unsigned MinNumElts) {
   }
 }
 
+/// An enum to describe what types of loops we should attempt to tail-fold:
+///   Disabled:    None
+///   Reductions:  Loops containing reductions
+///   Recurrences: Loops with first-order recurrences, i.e. that would
+///                  require a SVE splice instruction
+///   Reverse:     Reverse loops
+///   Simple:      Loops that are not reversed and don't contain reductions
+///                  or first-order recurrences.
+///   All:         All
+enum class TailFoldingOpts : uint8_t {
+  Disabled = 0x00,
+  Simple = 0x01,
+  Reductions = 0x02,
+  Recurrences = 0x04,
+  Reverse = 0x08,
+  All = Reductions | Recurrences | Simple | Reverse
+};
+
+LLVM_DECLARE_ENUM_AS_BITMASK(TailFoldingOpts,
+                             /* LargestValue */ (long)TailFoldingOpts::Reverse);
+
 namespace AArch64ExactFPImm {
   struct ExactFPImm {
     const char *Name;
@@ -566,10 +562,16 @@ namespace AArch64ExactFPImm {
 }
 
 namespace AArch64PState {
-  struct PState : SysAlias{
+  struct PStateImm0_15 : SysAlias{
     using SysAlias::SysAlias;
   };
-  #define GET_PSTATE_DECL
+  #define GET_PSTATEIMM0_15_DECL
+  #include "AArch64GenSystemOperands.inc"
+
+  struct PStateImm0_1 : SysAlias{
+    using SysAlias::SysAlias;
+  };
+  #define GET_PSTATEIMM0_1_DECL
   #include "AArch64GenSystemOperands.inc"
 }
 
@@ -828,10 +830,11 @@ inline static StringRef AArch64PACKeyIDToString(AArch64PACKey::ID KeyID) {
   case AArch64PACKey::DB:
     return StringRef("db");
   }
+  llvm_unreachable("Unhandled AArch64PACKey::ID enum");
 }
 
 /// Return numeric key ID for 2-letter identifier string.
-inline static Optional<AArch64PACKey::ID>
+inline static std::optional<AArch64PACKey::ID>
 AArch64StringToPACKeyID(StringRef Name) {
   if (Name == "ia")
     return AArch64PACKey::IA;
@@ -841,7 +844,7 @@ AArch64StringToPACKeyID(StringRef Name) {
     return AArch64PACKey::DA;
   if (Name == "db")
     return AArch64PACKey::DB;
-  return None;
+  return std::nullopt;
 }
 
 namespace AArch64 {

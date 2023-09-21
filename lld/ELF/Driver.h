@@ -10,13 +10,13 @@
 #define LLD_ELF_DRIVER_H
 
 #include "lld/Common/LLVM.h"
-#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Option/ArgList.h"
+#include <optional>
 
 namespace lld::elf {
 // Parses command line options.
-class ELFOptTable : public llvm::opt::OptTable {
+class ELFOptTable : public llvm::opt::GenericOptTable {
 public:
   ELFOptTable();
   llvm::opt::InputArgList parse(ArrayRef<const char *> argv);
@@ -25,7 +25,7 @@ public:
 // Create enum with OPT_xxx values for each option in Options.td
 enum {
   OPT_INVALID = 0,
-#define OPTION(_1, _2, ID, _4, _5, _6, _7, _8, _9, _10, _11, _12) OPT_##ID,
+#define OPTION(...) LLVM_MAKE_OPT_ID(__VA_ARGS__),
 #include "Options.inc"
 #undef OPTION
 };
@@ -33,10 +33,10 @@ enum {
 void printHelp();
 std::string createResponseFile(const llvm::opt::InputArgList &args);
 
-llvm::Optional<std::string> findFromSearchPaths(StringRef path);
-llvm::Optional<std::string> searchScript(StringRef path);
-llvm::Optional<std::string> searchLibraryBaseName(StringRef path);
-llvm::Optional<std::string> searchLibrary(StringRef path);
+std::optional<std::string> findFromSearchPaths(StringRef path);
+std::optional<std::string> searchScript(StringRef path);
+std::optional<std::string> searchLibraryBaseName(StringRef path);
+std::optional<std::string> searchLibrary(StringRef path);
 
 } // namespace lld::elf
 

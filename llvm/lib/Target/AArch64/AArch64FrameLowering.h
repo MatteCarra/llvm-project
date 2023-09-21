@@ -24,19 +24,25 @@ public:
       : TargetFrameLowering(StackGrowsDown, Align(16), 0, Align(16),
                             true /*StackRealignable*/) {}
 
-  void emitCalleeSavedFrameMoves(MachineBasicBlock &MBB,
-                                 MachineBasicBlock::iterator MBBI) const;
-
   void resetCFIToInitialState(MachineBasicBlock &MBB) const override;
 
   MachineBasicBlock::iterator
   eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
                                 MachineBasicBlock::iterator I) const override;
 
+  static void signLR(MachineFunction &MF, MachineBasicBlock &MBB,
+                     MachineBasicBlock::iterator MBBI, bool NeedsWinCFI,
+                     bool *HasWinCFI);
+
+  static void authenticateLR(MachineFunction &MF, MachineBasicBlock &MBB,
+                             bool NeedsWinCFI, bool *HasWinCFI);
+
   /// emitProlog/emitEpilog - These methods insert prolog and epilog code into
   /// the function.
   void emitPrologue(MachineFunction &MF, MachineBasicBlock &MBB) const override;
   void emitEpilogue(MachineFunction &MF, MachineBasicBlock &MBB) const override;
+
+  bool enableCFIFixup(MachineFunction &MF) const override;
 
   bool canUseAsPrologue(const MachineBasicBlock &MBB) const override;
 

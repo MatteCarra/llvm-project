@@ -17,10 +17,10 @@
 #include "clang/APINotes/Types.h"
 #include "clang/Basic/LLVM.h"
 #include "clang/Basic/Specifiers.h"
-#include "llvm/ADT/Optional.h"
 #include "llvm/Support/VersionTuple.h"
 #include "llvm/Support/YAMLParser.h"
 #include "llvm/Support/YAMLTraits.h"
+#include <optional>
 #include <vector>
 using namespace clang;
 using namespace api_notes;
@@ -28,8 +28,6 @@ using namespace api_notes;
 namespace {
 enum class APIAvailability {
   Available = 0,
-  OSX,
-  IOS,
   None,
   NonSwift,
 };
@@ -39,8 +37,6 @@ namespace llvm {
 namespace yaml {
 template <> struct ScalarEnumerationTraits<APIAvailability> {
   static void enumeration(IO &IO, APIAvailability &AA) {
-    IO.enumCase(AA, "OSX", APIAvailability::OSX);
-    IO.enumCase(AA, "iOS", APIAvailability::IOS);
     IO.enumCase(AA, "none", APIAvailability::None);
     IO.enumCase(AA, "nonswift", APIAvailability::NonSwift);
     IO.enumCase(AA, "available", APIAvailability::Available);
@@ -70,9 +66,9 @@ template <> struct ScalarEnumerationTraits<MethodKind> {
 namespace {
 struct Param {
   unsigned Position;
-  Optional<bool> NoEscape = false;
-  Optional<NullabilityKind> Nullability;
-  Optional<RetainCountConventionKind> RetainCountConvention;
+  std::optional<bool> NoEscape = false;
+  std::optional<NullabilityKind> Nullability;
+  std::optional<RetainCountConventionKind> RetainCountConvention;
   StringRef Type;
 };
 
@@ -119,7 +115,7 @@ template <> struct ScalarEnumerationTraits<RetainCountConventionKind> {
 template <> struct MappingTraits<Param> {
   static void mapping(IO &IO, Param &P) {
     IO.mapRequired("Position", P.Position);
-    IO.mapOptional("Nullability", P.Nullability, llvm::None);
+    IO.mapOptional("Nullability", P.Nullability, std::nullopt);
     IO.mapOptional("RetainCountConvention", P.RetainCountConvention);
     IO.mapOptional("NoEscape", P.NoEscape);
     IO.mapOptional("Type", P.Type, StringRef(""));
@@ -151,10 +147,10 @@ struct Method {
   MethodKind Kind;
   ParamsSeq Params;
   NullabilitySeq Nullability;
-  Optional<NullabilityKind> NullabilityOfRet;
-  Optional<RetainCountConventionKind> RetainCountConvention;
+  std::optional<NullabilityKind> NullabilityOfRet;
+  std::optional<RetainCountConventionKind> RetainCountConvention;
   AvailabilityItem Availability;
-  Optional<bool> SwiftPrivate;
+  std::optional<bool> SwiftPrivate;
   StringRef SwiftName;
   FactoryAsInitKind FactoryAsInit = FactoryAsInitKind::Infer;
   bool DesignatedInit = false;
@@ -183,7 +179,7 @@ template <> struct MappingTraits<Method> {
     IO.mapRequired("MethodKind", M.Kind);
     IO.mapOptional("Parameters", M.Params);
     IO.mapOptional("Nullability", M.Nullability);
-    IO.mapOptional("NullabilityOfRet", M.NullabilityOfRet, llvm::None);
+    IO.mapOptional("NullabilityOfRet", M.NullabilityOfRet, std::nullopt);
     IO.mapOptional("RetainCountConvention", M.RetainCountConvention);
     IO.mapOptional("Availability", M.Availability.Mode,
                    APIAvailability::Available);
@@ -202,12 +198,12 @@ template <> struct MappingTraits<Method> {
 namespace {
 struct Property {
   StringRef Name;
-  llvm::Optional<MethodKind> Kind;
-  llvm::Optional<NullabilityKind> Nullability;
+  std::optional<MethodKind> Kind;
+  std::optional<NullabilityKind> Nullability;
   AvailabilityItem Availability;
-  Optional<bool> SwiftPrivate;
+  std::optional<bool> SwiftPrivate;
   StringRef SwiftName;
-  Optional<bool> SwiftImportAsAccessors;
+  std::optional<bool> SwiftImportAsAccessors;
   StringRef Type;
 };
 
@@ -222,7 +218,7 @@ template <> struct MappingTraits<Property> {
   static void mapping(IO &IO, Property &P) {
     IO.mapRequired("Name", P.Name);
     IO.mapOptional("PropertyKind", P.Kind);
-    IO.mapOptional("Nullability", P.Nullability, llvm::None);
+    IO.mapOptional("Nullability", P.Nullability, std::nullopt);
     IO.mapOptional("Availability", P.Availability.Mode,
                    APIAvailability::Available);
     IO.mapOptional("AvailabilityMsg", P.Availability.Msg, StringRef(""));
@@ -240,12 +236,12 @@ struct Class {
   StringRef Name;
   bool AuditedForNullability = false;
   AvailabilityItem Availability;
-  Optional<bool> SwiftPrivate;
+  std::optional<bool> SwiftPrivate;
   StringRef SwiftName;
-  Optional<StringRef> SwiftBridge;
-  Optional<StringRef> NSErrorDomain;
-  Optional<bool> SwiftImportAsNonGeneric;
-  Optional<bool> SwiftObjCMembers;
+  std::optional<StringRef> SwiftBridge;
+  std::optional<StringRef> NSErrorDomain;
+  std::optional<bool> SwiftImportAsNonGeneric;
+  std::optional<bool> SwiftObjCMembers;
   MethodsSeq Methods;
   PropertiesSeq Properties;
 };
@@ -282,10 +278,10 @@ struct Function {
   StringRef Name;
   ParamsSeq Params;
   NullabilitySeq Nullability;
-  Optional<NullabilityKind> NullabilityOfRet;
-  Optional<api_notes::RetainCountConventionKind> RetainCountConvention;
+  std::optional<NullabilityKind> NullabilityOfRet;
+  std::optional<api_notes::RetainCountConventionKind> RetainCountConvention;
   AvailabilityItem Availability;
-  Optional<bool> SwiftPrivate;
+  std::optional<bool> SwiftPrivate;
   StringRef SwiftName;
   StringRef Type;
   StringRef ResultType;
@@ -303,7 +299,7 @@ template <> struct MappingTraits<Function> {
     IO.mapRequired("Name", F.Name);
     IO.mapOptional("Parameters", F.Params);
     IO.mapOptional("Nullability", F.Nullability);
-    IO.mapOptional("NullabilityOfRet", F.NullabilityOfRet, llvm::None);
+    IO.mapOptional("NullabilityOfRet", F.NullabilityOfRet, std::nullopt);
     IO.mapOptional("RetainCountConvention", F.RetainCountConvention);
     IO.mapOptional("Availability", F.Availability.Mode,
                    APIAvailability::Available);
@@ -319,9 +315,9 @@ template <> struct MappingTraits<Function> {
 namespace {
 struct GlobalVariable {
   StringRef Name;
-  llvm::Optional<NullabilityKind> Nullability;
+  std::optional<NullabilityKind> Nullability;
   AvailabilityItem Availability;
-  Optional<bool> SwiftPrivate;
+  std::optional<bool> SwiftPrivate;
   StringRef SwiftName;
   StringRef Type;
 };
@@ -336,7 +332,7 @@ namespace yaml {
 template <> struct MappingTraits<GlobalVariable> {
   static void mapping(IO &IO, GlobalVariable &GV) {
     IO.mapRequired("Name", GV.Name);
-    IO.mapOptional("Nullability", GV.Nullability, llvm::None);
+    IO.mapOptional("Nullability", GV.Nullability, std::nullopt);
     IO.mapOptional("Availability", GV.Availability.Mode,
                    APIAvailability::Available);
     IO.mapOptional("AvailabilityMsg", GV.Availability.Msg, StringRef(""));
@@ -352,7 +348,7 @@ namespace {
 struct EnumConstant {
   StringRef Name;
   AvailabilityItem Availability;
-  Optional<bool> SwiftPrivate;
+  std::optional<bool> SwiftPrivate;
   StringRef SwiftName;
 };
 
@@ -411,12 +407,12 @@ struct Tag {
   StringRef Name;
   AvailabilityItem Availability;
   StringRef SwiftName;
-  Optional<bool> SwiftPrivate;
-  Optional<StringRef> SwiftBridge;
-  Optional<StringRef> NSErrorDomain;
-  Optional<EnumExtensibilityKind> EnumExtensibility;
-  Optional<bool> FlagEnum;
-  Optional<EnumConvenienceAliasKind> EnumConvenienceKind;
+  std::optional<bool> SwiftPrivate;
+  std::optional<StringRef> SwiftBridge;
+  std::optional<StringRef> NSErrorDomain;
+  std::optional<EnumExtensibilityKind> EnumExtensibility;
+  std::optional<bool> FlagEnum;
+  std::optional<EnumConvenienceAliasKind> EnumConvenienceKind;
 };
 
 typedef std::vector<Tag> TagsSeq;
@@ -457,10 +453,10 @@ struct Typedef {
   StringRef Name;
   AvailabilityItem Availability;
   StringRef SwiftName;
-  Optional<bool> SwiftPrivate;
-  Optional<StringRef> SwiftBridge;
-  Optional<StringRef> NSErrorDomain;
-  Optional<SwiftNewTypeKind> SwiftType;
+  std::optional<bool> SwiftPrivate;
+  std::optional<StringRef> SwiftBridge;
+  std::optional<StringRef> NSErrorDomain;
+  std::optional<SwiftNewTypeKind> SwiftType;
 };
 
 typedef std::vector<Typedef> TypedefsSeq;
@@ -495,6 +491,9 @@ template <> struct MappingTraits<Typedef> {
 } // namespace llvm
 
 namespace {
+struct Namespace;
+typedef std::vector<Namespace> NamespacesSeq;
+
 struct TopLevelItems {
   ClassesSeq Classes;
   ClassesSeq Protocols;
@@ -503,6 +502,7 @@ struct TopLevelItems {
   EnumConstantsSeq EnumConstants;
   TagsSeq Tags;
   TypedefsSeq Typedefs;
+  NamespacesSeq Namespaces;
 };
 } // namespace
 
@@ -516,7 +516,36 @@ static void mapTopLevelItems(IO &IO, TopLevelItems &TLI) {
   IO.mapOptional("Enumerators", TLI.EnumConstants);
   IO.mapOptional("Tags", TLI.Tags);
   IO.mapOptional("Typedefs", TLI.Typedefs);
+  IO.mapOptional("Namespaces", TLI.Namespaces);
 }
+} // namespace yaml
+} // namespace llvm
+
+namespace {
+struct Namespace {
+  StringRef Name;
+  AvailabilityItem Availability;
+  StringRef SwiftName;
+  std::optional<bool> SwiftPrivate;
+  TopLevelItems Items;
+};
+} // namespace
+
+LLVM_YAML_IS_SEQUENCE_VECTOR(Namespace)
+
+namespace llvm {
+namespace yaml {
+template <> struct MappingTraits<Namespace> {
+  static void mapping(IO &IO, Namespace &T) {
+    IO.mapRequired("Name", T.Name);
+    IO.mapOptional("Availability", T.Availability.Mode,
+                   APIAvailability::Available);
+    IO.mapOptional("AvailabilityMsg", T.Availability.Msg, StringRef(""));
+    IO.mapOptional("SwiftPrivate", T.SwiftPrivate);
+    IO.mapOptional("SwiftName", T.SwiftName, StringRef(""));
+    mapTopLevelItems(IO, T.Items);
+  }
+};
 } // namespace yaml
 } // namespace llvm
 
@@ -549,7 +578,7 @@ struct Module {
   TopLevelItems TopLevel;
   VersionedSeq SwiftVersions;
 
-  llvm::Optional<bool> SwiftInferImportAsMember = {llvm::None};
+  std::optional<bool> SwiftInferImportAsMember;
 
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
   LLVM_DUMP_METHOD void dump() /*const*/;

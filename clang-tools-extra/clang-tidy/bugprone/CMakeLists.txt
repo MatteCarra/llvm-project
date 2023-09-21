@@ -15,12 +15,16 @@ add_clang_library(clangTidyBugproneModule
   DanglingHandleCheck.cpp
   DynamicStaticInitializersCheck.cpp
   EasilySwappableParametersCheck.cpp
+  EmptyCatchCheck.cpp
   ExceptionEscapeCheck.cpp
   FoldInitTypeCheck.cpp
   ForwardDeclarationNamespaceCheck.cpp
   ForwardingReferenceOverloadCheck.cpp
   ImplicitWideningOfMultiplicationResultCheck.cpp
   InaccurateEraseCheck.cpp
+  IncorrectEnableIfCheck.cpp
+  SwitchMissingDefaultCaseCheck.cpp
+  IncDecInConditionsCheck.cpp
   IncorrectRoundingsCheck.cpp
   InfiniteLoopCheck.cpp
   IntegerDivisionCheck.cpp
@@ -31,20 +35,25 @@ add_clang_library(clangTidyBugproneModule
   MisplacedPointerArithmeticInAllocCheck.cpp
   MisplacedWideningCastCheck.cpp
   MoveForwardingReferenceCheck.cpp
+  MultiLevelImplicitPointerConversionCheck.cpp
+  MultipleNewInOneExpressionCheck.cpp
   MultipleStatementMacroCheck.cpp
   NoEscapeCheck.cpp
+  NonZeroEnumToBoolConversionCheck.cpp
   NotNullTerminatedResultCheck.cpp
+  OptionalValueConversionCheck.cpp
   ParentVirtualCallCheck.cpp
   PosixReturnCheck.cpp
   RedundantBranchConditionCheck.cpp
   ReservedIdentifierCheck.cpp
   SharedPtrArrayMismatchCheck.cpp
-  SmartPtrArrayMismatchCheck.cpp
   SignalHandlerCheck.cpp
   SignedCharMisuseCheck.cpp
   SizeofContainerCheck.cpp
   SizeofExpressionCheck.cpp
+  SmartPtrArrayMismatchCheck.cpp
   SpuriouslyWakeUpFunctionsCheck.cpp
+  StandaloneEmptyCheck.cpp
   StringConstructorCheck.cpp
   StringIntegerAssignmentCheck.cpp
   StringLiteralWithEmbeddedNulCheck.cpp
@@ -66,6 +75,8 @@ add_clang_library(clangTidyBugproneModule
   UndelegatedConstructorCheck.cpp
   UnhandledExceptionAtNewCheck.cpp
   UnhandledSelfAssignmentCheck.cpp
+  UniquePtrArrayMismatchCheck.cpp
+  UnsafeFunctionsCheck.cpp
   UnusedRaiiCheck.cpp
   UnusedReturnValueCheck.cpp
   UseAfterMoveCheck.cpp
@@ -78,6 +89,7 @@ add_clang_library(clangTidyBugproneModule
 
   DEPENDS
   omp_gen
+  ClangDriverOptions
   )
 
 clang_target_link_libraries(clangTidyBugproneModule

@@ -522,7 +522,7 @@ func.func @loop_nest_symbolic_bound(%N : index) {
     // UNROLL-BY-4-NEXT: %2 = "foo"() : () -> i32
     // UNROLL-BY-4-NEXT: %3 = "foo"() : () -> i32
     // UNROLL-BY-4-NEXT: }
-    // A cleanup loop will be be generated here.
+    // A cleanup loop will be generated here.
     // UNROLL-BY-4-NEXT: affine.for %arg2 = #map{{[0-9]*}}()[%arg0] to %arg0 {
     // UNROLL-BY-4-NEXT: %0 = "foo"() : () -> i32
     // UNROLL-BY-4-NEXT: }
@@ -746,4 +746,25 @@ func.func @unroll_cleanup_loop_with_identical_unroll_factor() {
 // UNROLL-CLEANUP-LOOP-NEXT: %[[V4:.*]] = affine.apply {{.*}}
 // UNROLL-CLEANUP-LOOP-NEXT: {{.*}} = "foo"(%[[V4]]) : (index) -> i32
 // UNROLL-CLEANUP-LOOP-NEXT: return
+}
+
+// UNROLL-BY-4-LABEL: func @known_multiple_ceildiv
+func.func @known_multiple_ceildiv(%N: index, %S: index) {
+  %cst = arith.constant 0.0 : f32
+  %m = memref.alloc(%S) : memref<?xf32>
+  // This exercises affine expr getLargestKnownDivisor for the ceildiv case.
+  affine.for %i = 0 to affine_map<(d0) -> (32 * d0 + 64)>(%N) step 8 {
+    affine.store %cst, %m[%i] : memref<?xf32>
+  }
+  // UNROLL-BY-4:     affine.for %{{.*}} = 0 to {{.*}} step 32
+  // UNROLL-BY-4-NOT: affine.for
+
+  // This exercises affine expr getLargestKnownDivisor for floordiv.
+  affine.for %i = 0 to affine_map<(d0) -> ((32 * d0 + 64) floordiv 8)>(%N) {
+    affine.store %cst, %m[%i] : memref<?xf32>
+  }
+  // UNROLL-BY-4:     affine.for %{{.*}} = 0 to {{.*}} step 4
+  // UNROLL-BY-4-NOT: affine.for
+  // UNROLL-BY-4:     return
+  return
 }

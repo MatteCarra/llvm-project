@@ -98,10 +98,14 @@ inline bool isDigit(char C) { return C >= '0' && C <= '9'; }
 /// Checks if character \p C is a hexadecimal numeric character.
 inline bool isHexDigit(char C) { return hexDigitValue(C) != ~0U; }
 
+/// Checks if character \p C is a lowercase letter as classified by "C" locale.
+inline bool isLower(char C) { return 'a' <= C && C <= 'z'; }
+
+/// Checks if character \p C is a uppercase letter as classified by "C" locale.
+inline bool isUpper(char C) { return 'A' <= C && C <= 'Z'; }
+
 /// Checks if character \p C is a valid letter as classified by "C" locale.
-inline bool isAlpha(char C) {
-  return ('a' <= C && C <= 'z') || ('A' <= C && C <= 'Z');
-}
+inline bool isAlpha(char C) { return isLower(C) || isUpper(C); }
 
 /// Checks whether character \p C is either a decimal digit or an uppercase or
 /// lowercase letter as classified by "C" locale.
@@ -137,14 +141,14 @@ inline bool isSpace(char C) {
 
 /// Returns the corresponding lowercase character if \p x is uppercase.
 inline char toLower(char x) {
-  if (x >= 'A' && x <= 'Z')
+  if (isUpper(x))
     return x - 'A' + 'a';
   return x;
 }
 
 /// Returns the corresponding uppercase character if \p x is lowercase.
 inline char toUpper(char x) {
-  if (x >= 'a' && x <= 'z')
+  if (isLower(x))
     return x - 'a' + 'A';
   return x;
 }
@@ -451,14 +455,8 @@ template <typename T> inline size_t join_one_item_size(const T &Str) {
   return Str.size();
 }
 
-inline size_t join_items_size() { return 0; }
-
-template <typename A1> inline size_t join_items_size(const A1 &A) {
-  return join_one_item_size(A);
-}
-template <typename A1, typename... Args>
-inline size_t join_items_size(const A1 &A, Args &&... Items) {
-  return join_one_item_size(A) + join_items_size(std::forward<Args>(Items)...);
+template <typename... Args> inline size_t join_items_size(Args &&...Items) {
+  return (0 + ... + join_one_item_size(std::forward<Args>(Items)));
 }
 
 } // end namespace detail

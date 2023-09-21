@@ -23,6 +23,7 @@
 #include "llvm/ADT/PointerUnion.h"
 #include "llvm/ADT/SmallVector.h"
 #include <cassert>
+#include <optional>
 #include <utility>
 
 namespace clang {
@@ -222,7 +223,7 @@ enum class TemplateSubstitutionKind : char {
       TemplateArgumentLists.push_back({{}, Args});
     }
 
-    void addOuterTemplateArguments(llvm::NoneType) {
+    void addOuterTemplateArguments(std::nullopt_t) {
       assert(!NumRetainedOuterLevels &&
              "substituted args outside retained args?");
       TemplateArgumentLists.push_back({});
@@ -231,9 +232,21 @@ enum class TemplateSubstitutionKind : char {
     /// Replaces the current 'innermost' level with the provided argument list.
     /// This is useful for type deduction cases where we need to get the entire
     /// list from the AST, but then add the deduced innermost list.
-    void replaceInnermostTemplateArguments(ArgList Args) {
-      assert(TemplateArgumentLists.size() > 0 && "Replacing in an empty list?");
-      TemplateArgumentLists[0].Args = Args;
+    void replaceInnermostTemplateArguments(Decl *AssociatedDecl, ArgList Args) {
+      assert((!TemplateArgumentLists.empty() || NumRetainedOuterLevels) &&
+             "Replacing in an empty list?");
+
+      if (!TemplateArgumentLists.empty()) {
+        assert((TemplateArgumentLists[0].AssociatedDeclAndFinal.getPointer() ||
+                TemplateArgumentLists[0].AssociatedDeclAndFinal.getPointer() ==
+                    AssociatedDecl) &&
+               "Trying to change incorrect declaration?");
+        TemplateArgumentLists[0].Args = Args;
+      } else {
+        --NumRetainedOuterLevels;
+        TemplateArgumentLists.push_back(
+            {{AssociatedDecl, /*Final=*/false}, Args});
+      }
     }
 
     /// Add an outermost level that we are not substituting. We have no
@@ -260,6 +273,23 @@ enum class TemplateSubstitutionKind : char {
     }
     ArgListsIterator end() { return TemplateArgumentLists.end(); }
     ConstArgListsIterator end() const { return TemplateArgumentLists.end(); }
+
+    LLVM_DUMP_METHOD void dump() const {
+      LangOptions LO;
+      LO.CPlusPlus = true;
+      LO.Bool = true;
+      PrintingPolicy PP(LO);
+      llvm::errs() << "NumRetainedOuterLevels: " << NumRetainedOuterLevels
+                   << "\n";
+      for (unsigned Depth = NumRetainedOuterLevels; Depth < getNumLevels();
+           ++Depth) {
+        llvm::errs() << Depth << ": ";
+        printTemplateArgumentList(
+            llvm::errs(),
+            TemplateArgumentLists[getNumLevels() - Depth - 1].Args, PP);
+        llvm::errs() << "\n";
+      }
+    }
   };
 
   /// The context in which partial ordering of function templates occurs.
@@ -571,6 +601,7 @@ enum class TemplateSubstitutionKind : char {
 // Decls which never appear inside a class or function.
 #define OBJCCONTAINER(DERIVED, BASE)
 #define FILESCOPEASM(DERIVED, BASE)
+#define TOPLEVELSTMT(DERIVED, BASE)
 #define IMPORT(DERIVED, BASE)
 #define EXPORT(DERIVED, BASE)
 #define LINKAGESPEC(DERIVED, BASE)
@@ -599,8 +630,8 @@ enum class TemplateSubstitutionKind : char {
     // A few supplemental visitor functions.
     Decl *VisitCXXMethodDecl(CXXMethodDecl *D,
                              TemplateParameterList *TemplateParams,
-                             Optional<const ASTTemplateArgumentListInfo *>
-                                 ClassScopeSpecializationArgs = llvm::None,
+                             std::optional<const ASTTemplateArgumentListInfo *>
+                                 ClassScopeSpecializationArgs = std::nullopt,
                              RewriteKind RK = RewriteKind::None);
     Decl *VisitFunctionDecl(FunctionDecl *D,
                             TemplateParameterList *TemplateParams,

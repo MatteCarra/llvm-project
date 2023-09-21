@@ -9,14 +9,26 @@
 ! RUN:     -flarge-sizes \
 ! RUN:     -fconvert=little-endian \
 ! RUN:     -ffp-contract=fast \
-! RUN:     -fno-honor-infinities \
 ! RUN:     -fno-honor-nans \
 ! RUN:     -fapprox-func \
 ! RUN:     -fno-signed-zeros \
 ! RUN:     -fassociative-math \
 ! RUN:     -freciprocal-math \
 ! RUN:     -fpass-plugin=Bye%pluginext \
-! RUN:     -mllvm -print-before-all\
+! RUN:     -fversion-loops-for-stride \
+! RUN:     -flang-experimental-polymorphism \
+! RUN:     -flang-experimental-hlfir \
+! RUN:     -fno-ppc-native-vector-element-order \
+! RUN:     -fppc-native-vector-element-order \
+! RUN:     -mllvm -print-before-all \
+! RUN:     -save-temps=obj \
+! RUN:     -Rpass \
+! RUN:     -Rpass-missed \
+! RUN:     -Rpass-analysis \
+! RUN:     -Rno-pass \
+! RUN:     -Reverything \
+! RUN:     -Rno-everything \
+! RUN:     -Rpass=inline \
 ! RUN:     -P \
 ! RUN:   | FileCheck %s
 
@@ -27,7 +39,6 @@
 ! CHECK: "-fdefault-real-8"
 ! CHECK: "-flarge-sizes"
 ! CHECK: "-ffp-contract=fast"
-! CHECK: "-menable-no-infs"
 ! CHECK: "-menable-no-nans"
 ! CHECK: "-fapprox-func"
 ! CHECK: "-fno-signed-zeros"
@@ -35,4 +46,17 @@
 ! CHECK: "-freciprocal-math"
 ! CHECK: "-fconvert=little-endian"
 ! CHECK: "-fpass-plugin=Bye
+! CHECK: "-fversion-loops-for-stride"
+! CHECK: "-flang-experimental-polymorphism"
+! CHECK: "-flang-experimental-hlfir"
+! CHECK: "-fno-ppc-native-vector-element-order"
+! CHECK: "-fppc-native-vector-element-order"
+! CHECK: "-Rpass"
+! CHECK: "-Rpass-missed"
+! CHECK: "-Rpass-analysis"
+! CHECK: "-Rno-pass"
+! CHECK: "-Reverything"
+! CHECK: "-Rno-everything"
+! CHECK: "-Rpass=inline"
 ! CHECK: "-mllvm" "-print-before-all"
+! CHECK: "-save-temps=obj"

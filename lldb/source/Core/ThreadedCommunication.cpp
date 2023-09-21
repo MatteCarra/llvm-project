@@ -17,13 +17,13 @@
 #include "lldb/Utility/Log.h"
 #include "lldb/Utility/Status.h"
 
-#include "llvm/ADT/None.h"
 #include "llvm/Support/Compiler.h"
 
 #include <algorithm>
 #include <chrono>
 #include <cstring>
 #include <memory>
+#include <shared_mutex>
 
 #include <cerrno>
 #include <cinttypes>
@@ -58,7 +58,7 @@ ThreadedCommunication::ThreadedCommunication(const char *name)
 ThreadedCommunication::~ThreadedCommunication() {
   LLDB_LOG(GetLog(LLDBLog::Object | LLDBLog::Communication),
            "{0} ThreadedCommunication::~ThreadedCommunication (name = {1})",
-           this, GetBroadcasterName().AsCString());
+           this, GetBroadcasterName());
 }
 
 void ThreadedCommunication::Clear() {
@@ -156,6 +156,8 @@ size_t ThreadedCommunication::Read(void *dst, size_t dst_len,
 }
 
 bool ThreadedCommunication::StartReadThread(Status *error_ptr) {
+  std::lock_guard<std::mutex> lock(m_read_thread_mutex);
+
   if (error_ptr)
     error_ptr->Clear();
 
@@ -178,8 +180,8 @@ bool ThreadedCommunication::StartReadThread(Status *error_ptr) {
     if (error_ptr)
       *error_ptr = Status(maybe_thread.takeError());
     else {
-      LLDB_LOG(GetLog(LLDBLog::Host), "failed to launch host thread: {}",
-               llvm::toString(maybe_thread.takeError()));
+      LLDB_LOG_ERROR(GetLog(LLDBLog::Host), maybe_thread.takeError(),
+                     "failed to launch host thread: {0}");
     }
   }
 
@@ -190,6 +192,8 @@ bool ThreadedCommunication::StartReadThread(Status *error_ptr) {
 }
 
 bool ThreadedCommunication::StopReadThread(Status *error_ptr) {
+  std::lock_guard<std::mutex> lock(m_read_thread_mutex);
+
   if (!m_read_thread.IsJoinable())
     return true;
 
@@ -200,13 +204,13 @@ bool ThreadedCommunication::StopReadThread(Status *error_ptr) {
 
   BroadcastEvent(eBroadcastBitReadThreadShouldExit, nullptr);
 
-  // error = m_read_thread.Cancel();
-
   Status error = m_read_thread.Join(nullptr);
   return error.Success();
 }
 
 bool ThreadedCommunication::JoinReadThread(Status *error_ptr) {
+  std::lock_guard<std::mutex> lock(m_read_thread_mutex);
+
   if (!m_read_thread.IsJoinable())
     return true;
 
@@ -362,7 +366,7 @@ void ThreadedCommunication::SynchronizeWithReadThread() {
 
   // Wait for the synchronization event.
   EventSP event_sp;
-  listener_sp->GetEvent(event_sp, llvm::None);
+  listener_sp->GetEvent(event_sp, std::nullopt);
 }
 
 void ThreadedCommunication::SetConnection(

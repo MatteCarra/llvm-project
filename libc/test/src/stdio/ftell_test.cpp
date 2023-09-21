@@ -7,14 +7,13 @@
 //===----------------------------------------------------------------------===//
 
 #include "src/stdio/fclose.h"
-#include "src/stdio/fflush.h"
 #include "src/stdio/fopen.h"
 #include "src/stdio/fread.h"
 #include "src/stdio/fseek.h"
 #include "src/stdio/ftell.h"
 #include "src/stdio/fwrite.h"
 #include "src/stdio/setvbuf.h"
-#include "utils/UnitTest/Test.h"
+#include "test/UnitTest/Test.h"
 
 #include <stdio.h>
 

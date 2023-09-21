@@ -46,9 +46,14 @@ void BoltAddressTranslation::writeEntriesForBB(MapTy &Map,
   // allowing it to overwrite the previously inserted key in the map.
   Map[BBOutputOffset] = BBInputOffset;
 
-  for (const auto &IOPair : BB.getOffsetTranslationTable()) {
-    const uint64_t OutputOffset = IOPair.first + BBOutputOffset;
-    const uint32_t InputOffset = IOPair.second;
+  const auto &IOAddressMap =
+      BB.getFunction()->getBinaryContext().getIOAddressMap();
+
+  for (const auto &[InputOffset, Sym] : BB.getLocSyms()) {
+    const auto InputAddress = BB.getFunction()->getAddress() + InputOffset;
+    const auto OutputAddress = IOAddressMap.lookup(InputAddress);
+    assert(OutputAddress && "Unknown instruction address");
+    const auto OutputOffset = *OutputAddress - FuncAddress;
 
     // Is this the first instruction in the BB? No need to duplicate the entry.
     if (OutputOffset == BBOutputOffset)
@@ -248,7 +253,7 @@ uint64_t BoltAddressTranslation::translate(uint64_t FuncAddress,
   return Offset - KeyVal->first + Val;
 }
 
-Optional<BoltAddressTranslation::FallthroughListTy>
+std::optional<BoltAddressTranslation::FallthroughListTy>
 BoltAddressTranslation::getFallthroughsInTrace(uint64_t FuncAddress,
                                                uint64_t From,
                                                uint64_t To) const {
@@ -263,7 +268,7 @@ BoltAddressTranslation::getFallthroughsInTrace(uint64_t FuncAddress,
 
   auto Iter = Maps.find(FuncAddress);
   if (Iter == Maps.end())
-    return NoneType();
+    return std::nullopt;
 
   const MapTy &Map = Iter->second;
   auto FromIter = Map.upper_bound(From);

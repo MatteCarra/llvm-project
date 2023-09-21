@@ -189,13 +189,16 @@ void BinaryEmitter::emitAll(StringRef OrgSecPrefix) {
 
   if (opts::UpdateDebugSections && BC.isELF()) {
     // Force the emission of debug line info into allocatable section to ensure
-    // RuntimeDyld will process it without ProcessAllSections flag.
+    // JITLink will process it.
     //
     // NB: on MachO all sections are required for execution, hence no need
     //     to change flags/attributes.
     MCSectionELF *ELFDwarfLineSection =
         static_cast<MCSectionELF *>(BC.MOFI->getDwarfLineSection());
     ELFDwarfLineSection->setFlags(ELF::SHF_ALLOC);
+    MCSectionELF *ELFDwarfLineStrSection =
+        static_cast<MCSectionELF *>(BC.MOFI->getDwarfLineStrSection());
+    ELFDwarfLineStrSection->setFlags(ELF::SHF_ALLOC);
   }
 
   if (RuntimeLibrary *RtLibrary = BC.getRuntimeLibrary())
@@ -211,6 +214,10 @@ void BinaryEmitter::emitAll(StringRef OrgSecPrefix) {
   }
 
   emitDataSections(OrgSecPrefix);
+
+  // TODO Enable for Mach-O once BinaryContext::getDataSection supports it.
+  if (BC.isELF())
+    AddressMap::emit(Streamer, BC);
 }
 
 void BinaryEmitter::emitFunctions() {
@@ -300,18 +307,16 @@ bool BinaryEmitter::emitFunction(BinaryFunction &Function,
     // Set section alignment to at least maximum possible object alignment.
     // We need this to support LongJmp and other passes that calculates
     // tentative layout.
-    if (Section->getAlignment() < opts::AlignFunctions)
-      Section->setAlignment(Align(opts::AlignFunctions));
+    Section->ensureMinAlignment(Align(opts::AlignFunctions));
 
-    Streamer.emitCodeAlignment(BinaryFunction::MinAlign, &*BC.STI);
+    Streamer.emitCodeAlignment(Align(BinaryFunction::MinAlign), &*BC.STI);
     uint16_t MaxAlignBytes = FF.isSplitFragment()
                                  ? Function.getMaxColdAlignmentBytes()
                                  : Function.getMaxAlignmentBytes();
     if (MaxAlignBytes > 0)
-      Streamer.emitCodeAlignment(Function.getAlignment(), &*BC.STI,
-                                 MaxAlignBytes);
+      Streamer.emitCodeAlignment(Function.getAlign(), &*BC.STI, MaxAlignBytes);
   } else {
-    Streamer.emitCodeAlignment(Function.getAlignment(), &*BC.STI);
+    Streamer.emitCodeAlignment(Function.getAlign(), &*BC.STI);
   }
 
   MCContext &Context = Streamer.getContext();
@@ -375,7 +380,7 @@ bool BinaryEmitter::emitFunction(BinaryFunction &Function,
   }
 
   if (opts::MarkFuncs)
-    Streamer.emitIntValue(BC.MIB->getTrapFillValue(), 1);
+    Streamer.emitBytes(BC.MIB->getTrapFillValue());
 
   // Emit CFI end
   if (Function.hasCFI())
@@ -419,7 +424,7 @@ void BinaryEmitter::emitFunctionBody(BinaryFunction &BF, FunctionFragment &FF,
     // case, the call site entries in that LSDA have 0 as offset to the landing
     // pad, which the runtime interprets as "no handler". To prevent this,
     // insert some padding.
-    Streamer.emitIntValue(BC.MIB->getTrapFillValue(), 1);
+    Streamer.emitBytes(BC.MIB->getTrapFillValue());
   }
 
   // Track the first emitted instruction with debug info.
@@ -427,7 +432,7 @@ void BinaryEmitter::emitFunctionBody(BinaryFunction &BF, FunctionFragment &FF,
   for (BinaryBasicBlock *const BB : FF) {
     if ((opts::AlignBlocks || opts::PreserveBlocksAlignment) &&
         BB->getAlignment() > 1)
-      Streamer.emitCodeAlignment(BB->getAlignment(), &*BC.STI,
+      Streamer.emitCodeAlignment(BB->getAlign(), &*BC.STI,
                                  BB->getAlignmentMaxBytes());
     Streamer.emitLabel(BB->getLabel());
     if (!EmitCodeOnly) {
@@ -516,7 +521,7 @@ void BinaryEmitter::emitConstantIslands(BinaryFunction &BF, bool EmitColdPart,
   const uint16_t Alignment = OnBehalfOf
                                  ? OnBehalfOf->getConstantIslandAlignment()
                                  : BF.getConstantIslandAlignment();
-  Streamer.emitCodeAlignment(Alignment, &*BC.STI);
+  Streamer.emitCodeAlignment(Align(Alignment), &*BC.STI);
 
   if (!OnBehalfOf) {
     if (!EmitColdPart)
@@ -796,7 +801,7 @@ void BinaryEmitter::emitJumpTable(const JumpTable &JT, MCSection *HotSection,
     LabelCounts[CurrentLabel] = CurrentLabelCount;
   } else {
     Streamer.switchSection(JT.Count > 0 ? HotSection : ColdSection);
-    Streamer.emitValueToAlignment(JT.EntrySize);
+    Streamer.emitValueToAlignment(Align(JT.EntrySize));
   }
   MCSymbol *LastLabel = nullptr;
   uint64_t Offset = 0;
@@ -816,7 +821,7 @@ void BinaryEmitter::emitJumpTable(const JumpTable &JT, MCSection *HotSection,
           Streamer.switchSection(HotSection);
         else
           Streamer.switchSection(ColdSection);
-        Streamer.emitValueToAlignment(JT.EntrySize);
+        Streamer.emitValueToAlignment(Align(JT.EntrySize));
       }
       // Emit all labels registered at the address of this jump table
       // to sync with our global symbol table.  We may have two labels
@@ -926,7 +931,7 @@ void BinaryEmitter::emitLSDA(BinaryFunction &BF, const FunctionFragment &FF) {
   const uint16_t TTypeAlignment = 4;
 
   // Type tables have to be aligned at 4 bytes.
-  Streamer.emitValueToAlignment(TTypeAlignment);
+  Streamer.emitValueToAlignment(Align(TTypeAlignment));
 
   // Emit the LSDA label.
   MCSymbol *LSDASymbol = BF.getLSDASymbol(FF.getFragmentNum());

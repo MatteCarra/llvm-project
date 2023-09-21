@@ -93,6 +93,7 @@ static kmp_cond_align_t __kmp_wait_cv;
 static kmp_mutex_align_t __kmp_wait_mx;
 
 kmp_uint64 __kmp_ticks_per_msec = 1000000;
+kmp_uint64 __kmp_ticks_per_usec = 1000;
 
 #ifdef DEBUG_SUSPEND
 static void __kmp_print_cond(char *buffer, kmp_cond_align_t *cond) {
@@ -131,13 +132,14 @@ void __kmp_affinity_determine_capable(const char *env_var) {
 #define KMP_CPU_SET_SIZE_LIMIT (sizeof(cpuset_t))
 #endif
 
+  int verbose = __kmp_affinity.flags.verbose;
+  int warnings = __kmp_affinity.flags.warnings;
+  enum affinity_type type = __kmp_affinity.type;
+
 #if KMP_OS_LINUX
   long gCode;
   unsigned char *buf;
   buf = (unsigned char *)KMP_INTERNAL_MALLOC(KMP_CPU_SET_SIZE_LIMIT);
-  int verbose = __kmp_affinity.flags.verbose;
-  int warnings = __kmp_affinity.flags.warnings;
-  enum affinity_type type = __kmp_affinity.type;
 
   // If the syscall returns a suggestion for the size,
   // then we don't have to search for an appropriate size.
@@ -484,7 +486,7 @@ static void *__kmp_launch_worker(void *thr) {
 #endif /* USE_ITT_BUILD */
 
 #if KMP_AFFINITY_SUPPORTED
-  __kmp_affinity_set_init_mask(gtid, FALSE);
+  __kmp_affinity_bind_init_mask(gtid);
 #endif
 
 #ifdef KMP_CANCEL_THREADS
@@ -978,7 +980,7 @@ void __kmp_exit_thread(int exit_status) {
 #if KMP_USE_MONITOR
 void __kmp_resume_monitor();
 
-void __kmp_reap_monitor(kmp_info_t *th) {
+extern "C" void __kmp_reap_monitor(kmp_info_t *th) {
   int status;
   void *exit_val;
 
@@ -1019,6 +1021,12 @@ void __kmp_reap_monitor(kmp_info_t *th) {
                 th->th.th_info.ds.ds_thread));
 
   KMP_MB(); /* Flush all pending memory write invalidates.  */
+}
+#else
+// Empty symbol to export (see exports_so.txt) when
+// monitor thread feature is disabled
+extern "C" void __kmp_reap_monitor(kmp_info_t *th) {
+  (void)th;
 }
 #endif // KMP_USE_MONITOR
 
@@ -1235,6 +1243,7 @@ static void __kmp_atfork_child(void) {
     *affinity = KMP_AFFINITY_INIT(affinity->env_var);
   __kmp_affin_fullMask = nullptr;
   __kmp_affin_origMask = nullptr;
+  __kmp_topology = nullptr;
 #endif // KMP_AFFINITY_SUPPORTED
 
 #if KMP_USE_MONITOR
@@ -1842,10 +1851,13 @@ int __kmp_read_from_file(char const *path, char const *format, ...) {
 
   va_start(args, format);
   FILE *f = fopen(path, "rb");
-  if (f == NULL)
+  if (f == NULL) {
+    va_end(args);
     return 0;
+  }
   result = vfscanf(f, format, args);
   fclose(f);
+  va_end(args);
 
   return result;
 }
@@ -1991,7 +2003,7 @@ kmp_uint64 __kmp_now_nsec() {
 /* Measure clock ticks per millisecond */
 void __kmp_initialize_system_tick() {
   kmp_uint64 now, nsec2, diff;
-  kmp_uint64 delay = 100000; // 50~100 usec on most machines.
+  kmp_uint64 delay = 1000000; // ~450 usec on most machines.
   kmp_uint64 nsec = __kmp_now_nsec();
   kmp_uint64 goal = __kmp_hardware_timestamp() + delay;
   while ((now = __kmp_hardware_timestamp()) < goal)
@@ -1999,9 +2011,11 @@ void __kmp_initialize_system_tick() {
   nsec2 = __kmp_now_nsec();
   diff = nsec2 - nsec;
   if (diff > 0) {
-    kmp_uint64 tpms = ((kmp_uint64)1e6 * (delay + (now - goal)) / diff);
-    if (tpms > 0)
-      __kmp_ticks_per_msec = tpms;
+    double tpus = 1000.0 * (double)(delay + (now - goal)) / (double)diff;
+    if (tpus > 0.0) {
+      __kmp_ticks_per_msec = (kmp_uint64)(tpus * 1000.0);
+      __kmp_ticks_per_usec = (kmp_uint64)tpus;
+    }
   }
 }
 #endif
@@ -2441,7 +2455,8 @@ finish: // Clean up and exit.
 
 #if !(KMP_ARCH_X86 || KMP_ARCH_X86_64 || KMP_MIC ||                            \
       ((KMP_OS_LINUX || KMP_OS_DARWIN) && KMP_ARCH_AARCH64) ||                 \
-      KMP_ARCH_PPC64 || KMP_ARCH_RISCV64 || KMP_ARCH_LOONGARCH64)
+      KMP_ARCH_PPC64 || KMP_ARCH_RISCV64 || KMP_ARCH_LOONGARCH64 ||            \
+      KMP_ARCH_ARM)
 
 // we really only need the case with 1 argument, because CLANG always build
 // a struct of pointers to shared variables referenced in the outlined function

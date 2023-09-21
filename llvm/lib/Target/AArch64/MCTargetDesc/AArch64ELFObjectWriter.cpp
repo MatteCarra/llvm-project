@@ -34,9 +34,13 @@ public:
 
   ~AArch64ELFObjectWriter() override = default;
 
+  MCSectionELF *getMemtagRelocsSection(MCContext &Ctx) const override;
+
 protected:
   unsigned getRelocType(MCContext &Ctx, const MCValue &Target,
                         const MCFixup &Fixup, bool IsPCRel) const override;
+  bool needsRelocateWithSymbol(const MCValue &Val, const MCSymbol &Sym,
+                               unsigned Type) const override;
   bool IsILP32;
 };
 
@@ -205,8 +209,12 @@ unsigned AArch64ELFObjectWriter::getRelocType(MCContext &Ctx,
                         "ILP32 8 byte absolute data "
                         "relocation not supported (LP64 eqv: ABS64)");
         return ELF::R_AARCH64_NONE;
-      } else
+      } else {
+        if (RefKind == AArch64MCExpr::VK_AUTH ||
+            RefKind == AArch64MCExpr::VK_AUTHADDR)
+          return ELF::R_AARCH64_AUTH_ABS64;
         return ELF::R_AARCH64_ABS64;
+      }
     case AArch64::fixup_aarch64_add_imm12:
       if (RefKind == AArch64MCExpr::VK_DTPREL_HI12)
         return R_CLS(TLSLD_ADD_DTPREL_HI12);
@@ -451,6 +459,18 @@ unsigned AArch64ELFObjectWriter::getRelocType(MCContext &Ctx,
   }
 
   llvm_unreachable("Unimplemented fixup -> relocation");
+}
+
+bool AArch64ELFObjectWriter::needsRelocateWithSymbol(const MCValue &Val,
+                                                     const MCSymbol &,
+                                                     unsigned) const {
+  return (Val.getRefKind() & AArch64MCExpr::VK_GOT) == AArch64MCExpr::VK_GOT;
+}
+
+MCSectionELF *
+AArch64ELFObjectWriter::getMemtagRelocsSection(MCContext &Ctx) const {
+  return Ctx.getELFSection(".memtag.globals.static",
+                           ELF::SHT_AARCH64_MEMTAG_GLOBALS_STATIC, 0);
 }
 
 std::unique_ptr<MCObjectTargetWriter>

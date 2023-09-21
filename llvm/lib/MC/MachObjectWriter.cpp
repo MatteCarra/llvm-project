@@ -129,7 +129,7 @@ uint64_t MachObjectWriter::getPaddingSize(const MCSection *Sec,
   const MCSection &NextSec = *Layout.getSectionOrder()[Next];
   if (NextSec.isVirtualSection())
     return 0;
-  return offsetToAlignment(EndAddr, Align(NextSec.getAlignment()));
+  return offsetToAlignment(EndAddr, NextSec.getAlign());
 }
 
 void MachObjectWriter::writeHeader(MachO::HeaderFileType Type,
@@ -244,8 +244,7 @@ void MachObjectWriter::writeSection(const MCAsmLayout &Layout,
   }
   W.write<uint32_t>(FileOffset);
 
-  assert(isPowerOf2_32(Section.getAlignment()) && "Invalid alignment!");
-  W.write<uint32_t>(Log2_32(Section.getAlignment()));
+  W.write<uint32_t>(Log2(Section.getAlign()));
   W.write<uint32_t>(NumRelocations ? RelocationsStart : 0);
   W.write<uint32_t>(NumRelocations);
   W.write<uint32_t>(Flags);
@@ -532,9 +531,7 @@ void MachObjectWriter::bindIndirectSymbols(MCAssembler &Asm) {
     // Set the symbol type to undefined lazy, but only on construction.
     //
     // FIXME: Do not hardcode.
-    bool Created;
-    Asm.registerSymbol(*it->Symbol, &Created);
-    if (Created)
+    if (Asm.registerSymbol(*it->Symbol))
       cast<MCSymbolMachO>(it->Symbol)->setReferenceTypeUndefinedLazy(true);
   }
 }
@@ -645,7 +642,7 @@ void MachObjectWriter::computeSectionAddresses(const MCAssembler &Asm,
                                                const MCAsmLayout &Layout) {
   uint64_t StartAddress = 0;
   for (const MCSection *Sec : Layout.getSectionOrder()) {
-    StartAddress = alignTo(StartAddress, Sec->getAlignment());
+    StartAddress = alignTo(StartAddress, Sec->getAlign());
     SectionAddress[Sec] = StartAddress;
     StartAddress += Layout.getSectionAddressSize(Sec);
 
@@ -711,16 +708,6 @@ bool MachObjectWriter::isSymbolRefDifferenceFullyResolvedImpl(
           (!SA.isTemporary() && FB.getAtom() != SA.getFragment()->getAtom() &&
            Asm.getSubsectionsViaSymbols()))
         return false;
-      return true;
-    }
-    // For Darwin x86_64, there is one special case when the reference IsPCRel.
-    // If the fragment with the reference does not have a base symbol but meets
-    // the simple way of dealing with this, in that it is a temporary symbol in
-    // the same atom then it is assumed to be fully resolved.  This is needed so
-    // a relocation entry is not created and so the static linker does not
-    // mess up the reference later.
-    else if(!FB.getAtom() &&
-            SA.isTemporary() && SA.isInSection() && &SecA == &SecB){
       return true;
     }
   }

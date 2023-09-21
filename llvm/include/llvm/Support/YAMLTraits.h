@@ -9,8 +9,8 @@
 #ifndef LLVM_SUPPORT_YAMLTRAITS_H
 #define LLVM_SUPPORT_YAMLTRAITS_H
 
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/BitVector.h"
-#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
@@ -27,6 +27,7 @@
 #include <map>
 #include <memory>
 #include <new>
+#include <optional>
 #include <string>
 #include <system_error>
 #include <type_traits>
@@ -505,9 +506,7 @@ struct has_CustomMappingTraits
 // has_FlowTraits<int> will cause an error with some compilers because
 // it subclasses int.  Using this wrapper only instantiates the
 // real has_FlowTraits only if the template type is a class.
-template <typename T, bool Enabled = std::is_class<T>::value>
-class has_FlowTraits
-{
+template <typename T, bool Enabled = std::is_class_v<T>> class has_FlowTraits {
 public:
    static const bool value = false;
 };
@@ -904,9 +903,10 @@ public:
   }
 
   template <typename T, typename Context>
-  void mapOptionalWithContext(const char *Key, Optional<T> &Val, Context &Ctx) {
-    this->processKeyWithDefault(Key, Val, Optional<T>(), /*Required=*/false,
-                                Ctx);
+  void mapOptionalWithContext(const char *Key, std::optional<T> &Val,
+                              Context &Ctx) {
+    this->processKeyWithDefault(Key, Val, std::optional<T>(),
+                                /*Required=*/false, Ctx);
   }
 
   template <typename T, typename Context>
@@ -926,9 +926,9 @@ public:
 
 private:
   template <typename T, typename Context>
-  void processKeyWithDefault(const char *Key, Optional<T> &Val,
-                             const Optional<T> &DefaultValue, bool Required,
-                             Context &Ctx);
+  void processKeyWithDefault(const char *Key, std::optional<T> &Val,
+                             const std::optional<T> &DefaultValue,
+                             bool Required, Context &Ctx);
 
   template <typename T, typename Context>
   void processKeyWithDefault(const char *Key, T &Val, const T &DefaultValue,
@@ -998,8 +998,8 @@ template <typename T>
 std::enable_if_t<has_ScalarTraits<T>::value, void> yamlize(IO &io, T &Val, bool,
                                                            EmptyContext &Ctx) {
   if ( io.outputting() ) {
-    std::string Storage;
-    raw_string_ostream Buffer(Storage);
+    SmallString<128> Storage;
+    raw_svector_ostream Buffer(Storage);
     ScalarTraits<T>::output(Val, io.getContext(), Buffer);
     StringRef Str = Buffer.str();
     io.scalarString(Str, ScalarTraits<T>::mustQuote(Str));
@@ -1464,11 +1464,8 @@ private:
   bool canElideEmptySequence() override;
 
   class HNode {
-    virtual void anchor();
-
   public:
-    HNode(Node *n) : _node(n) { }
-    virtual ~HNode() = default;
+    HNode(Node *n) : _node(n) {}
 
     static bool classof(const HNode *) { return true; }
 
@@ -1476,8 +1473,6 @@ private:
   };
 
   class EmptyHNode : public HNode {
-    void anchor() override;
-
   public:
     EmptyHNode(Node *n) : HNode(n) { }
 
@@ -1487,8 +1482,6 @@ private:
   };
 
   class ScalarHNode : public HNode {
-    void anchor() override;
-
   public:
     ScalarHNode(Node *n, StringRef s) : HNode(n), _value(s) { }
 
@@ -1506,8 +1499,6 @@ private:
   };
 
   class MapHNode : public HNode {
-    void anchor() override;
-
   public:
     MapHNode(Node *n) : HNode(n) { }
 
@@ -1517,16 +1508,13 @@ private:
 
     static bool classof(const MapHNode *) { return true; }
 
-    using NameToNodeAndLoc =
-        StringMap<std::pair<std::unique_ptr<HNode>, SMRange>>;
+    using NameToNodeAndLoc = StringMap<std::pair<HNode *, SMRange>>;
 
     NameToNodeAndLoc Mapping;
     SmallVector<std::string, 6> ValidKeys;
   };
 
   class SequenceHNode : public HNode {
-    void anchor() override;
-
   public:
     SequenceHNode(Node *n) : HNode(n) { }
 
@@ -1536,10 +1524,10 @@ private:
 
     static bool classof(const SequenceHNode *) { return true; }
 
-    std::vector<std::unique_ptr<HNode>> Entries;
+    std::vector<HNode *> Entries;
   };
 
-  std::unique_ptr<Input::HNode> createHNodes(Node *node);
+  Input::HNode *createHNodes(Node *node);
   void setError(HNode *hnode, const Twine &message);
   void setError(Node *node, const Twine &message);
   void setError(const SMRange &Range, const Twine &message);
@@ -1547,6 +1535,9 @@ private:
   void reportWarning(HNode *hnode, const Twine &message);
   void reportWarning(Node *hnode, const Twine &message);
   void reportWarning(const SMRange &Range, const Twine &message);
+
+  /// Release memory used by HNodes.
+  void releaseHNodeBuffers();
 
 public:
   // These are only used by operator>>. They could be private
@@ -1562,9 +1553,13 @@ public:
 private:
   SourceMgr                           SrcMgr; // must be before Strm
   std::unique_ptr<llvm::yaml::Stream> Strm;
-  std::unique_ptr<HNode>              TopNode;
+  HNode *TopNode = nullptr;
   std::error_code                     EC;
   BumpPtrAllocator                    StringAllocator;
+  SpecificBumpPtrAllocator<EmptyHNode> EmptyHNodeAllocator;
+  SpecificBumpPtrAllocator<ScalarHNode> ScalarHNodeAllocator;
+  SpecificBumpPtrAllocator<MapHNode> MapHNodeAllocator;
+  SpecificBumpPtrAllocator<SequenceHNode> SequenceHNodeAllocator;
   document_iterator                   DocIterator;
   llvm::BitVector                     BitValuesUsed;
   HNode *CurrentNode = nullptr;
@@ -1665,10 +1660,10 @@ private:
 };
 
 template <typename T, typename Context>
-void IO::processKeyWithDefault(const char *Key, Optional<T> &Val,
-                               const Optional<T> &DefaultValue, bool Required,
-                               Context &Ctx) {
-  assert(!DefaultValue && "Optional<T> shouldn't have a value!");
+void IO::processKeyWithDefault(const char *Key, std::optional<T> &Val,
+                               const std::optional<T> &DefaultValue,
+                               bool Required, Context &Ctx) {
+  assert(!DefaultValue && "std::optional<T> shouldn't have a value!");
   void *SaveInfo;
   bool UseDefault = true;
   const bool sameAsDefault = outputting() && !Val;
@@ -1677,13 +1672,14 @@ void IO::processKeyWithDefault(const char *Key, Optional<T> &Val,
   if (Val &&
       this->preflightKey(Key, Required, sameAsDefault, UseDefault, SaveInfo)) {
 
-    // When reading an Optional<X> key from a YAML description, we allow the
-    // special "<none>" value, which can be used to specify that no value was
-    // requested, i.e. the DefaultValue will be assigned. The DefaultValue is
-    // usually None.
+    // When reading an std::optional<X> key from a YAML description, we allow
+    // the special "<none>" value, which can be used to specify that no value
+    // was requested, i.e. the DefaultValue will be assigned. The DefaultValue
+    // is usually None.
     bool IsNone = false;
     if (!outputting())
-      if (const auto *Node = dyn_cast<ScalarNode>(((Input *)this)->getCurrentNode()))
+      if (const auto *Node =
+              dyn_cast<ScalarNode>(((Input *)this)->getCurrentNode()))
         // We use rtrim to ignore possible white spaces that might exist when a
         // comment is present on the same line.
         IsNone = Node->getRawValue().rtrim(' ') == "<none>";
@@ -1943,19 +1939,40 @@ operator<<(Output &yout, T &seq) {
 template <bool B> struct IsFlowSequenceBase {};
 template <> struct IsFlowSequenceBase<true> { static const bool flow = true; };
 
-template <typename T, bool Flow>
-struct SequenceTraitsImpl : IsFlowSequenceBase<Flow> {
-private:
-  using type = typename T::value_type;
+template <typename T, typename U = void>
+struct IsResizable : std::false_type {};
 
-public:
-  static size_t size(IO &io, T &seq) { return seq.size(); }
+template <typename T>
+struct IsResizable<T, std::void_t<decltype(std::declval<T>().resize(0))>>
+    : public std::true_type {};
+
+template <typename T, bool B> struct IsResizableBase {
+  using type = typename T::value_type;
 
   static type &element(IO &io, T &seq, size_t index) {
     if (index >= seq.size())
       seq.resize(index + 1);
     return seq[index];
   }
+};
+
+template <typename T> struct IsResizableBase<T, false> {
+  using type = typename T::value_type;
+
+  static type &element(IO &io, T &seq, size_t index) {
+    if (index >= seq.size()) {
+      io.setError(Twine("value sequence extends beyond static size (") +
+                  Twine(seq.size()) + ")");
+      return seq[0];
+    }
+    return seq[index];
+  }
+};
+
+template <typename T, bool Flow>
+struct SequenceTraitsImpl
+    : IsFlowSequenceBase<Flow>, IsResizableBase<T, IsResizable<T>::value> {
+  static size_t size(IO &io, T &seq) { return seq.size(); }
 };
 
 // Simple helper to check an expression can be used as a bool-valued template
@@ -1979,11 +1996,15 @@ struct SequenceTraits<
     SmallVectorImpl<T>,
     std::enable_if_t<CheckIsBool<SequenceElementTraits<T>::flow>::value>>
     : SequenceTraitsImpl<SmallVectorImpl<T>, SequenceElementTraits<T>::flow> {};
+template <typename T>
+struct SequenceTraits<
+    MutableArrayRef<T>,
+    std::enable_if_t<CheckIsBool<SequenceElementTraits<T>::flow>::value>>
+    : SequenceTraitsImpl<MutableArrayRef<T>, SequenceElementTraits<T>::flow> {};
 
 // Sequences of fundamental types use flow formatting.
 template <typename T>
-struct SequenceElementTraits<T,
-                             std::enable_if_t<std::is_fundamental<T>::value>> {
+struct SequenceElementTraits<T, std::enable_if_t<std::is_fundamental_v<T>>> {
   static const bool flow = true;
 };
 

@@ -16,35 +16,29 @@
 #include <algorithm>
 #include <cassert>
 
+#include "test_allocator.h"
 #include "test_macros.h"
 #include "min_allocator.h"
 
 template <class S>
-TEST_CONSTEXPR_CXX20 void
-test(const S& s, typename S::size_type pos, typename S::size_type n)
-{
-    if (pos <= s.size())
-    {
-        S str = s.substr(pos, n);
-        LIBCPP_ASSERT(str.__invariants());
-        assert(pos <= s.size());
-        typename S::size_type rlen = std::min(n, s.size() - pos);
-        assert(str.size() == rlen);
-        assert(S::traits_type::compare(s.data()+pos, str.data(), rlen) == 0);
-    }
+TEST_CONSTEXPR_CXX20 void test(const S& s, typename S::size_type pos, typename S::size_type n) {
+  if (pos <= s.size()) {
+    S str = s.substr(pos, n);
+    LIBCPP_ASSERT(str.__invariants());
+    assert(pos <= s.size());
+    typename S::size_type rlen = std::min(n, s.size() - pos);
+    assert(str.size() == rlen);
+    assert(S::traits_type::compare(s.data() + pos, str.data(), rlen) == 0);
+  }
 #ifndef TEST_HAS_NO_EXCEPTIONS
-    else if (!TEST_IS_CONSTANT_EVALUATED)
-    {
-        try
-        {
-            S str = s.substr(pos, n);
-            assert(false);
-        }
-        catch (std::out_of_range&)
-        {
-            assert(pos > s.size());
-        }
+  else if (!TEST_IS_CONSTANT_EVALUATED) {
+    try {
+      S str = s.substr(pos, n);
+      assert(false);
+    } catch (std::out_of_range&) {
+      assert(pos > s.size());
     }
+  }
 #endif
 }
 
@@ -119,11 +113,36 @@ TEST_CONSTEXPR_CXX20 bool test() {
   return true;
 }
 
-int main(int, char**)
-{
+TEST_CONSTEXPR_CXX20 bool test_alloc() {
+  {
+    using alloc  = test_allocator<char>;
+    using string = std::basic_string<char, std::char_traits<char>, alloc>;
+    test_allocator_statistics stats;
+    {
+      string str = string(alloc(&stats));
+      stats      = test_allocator_statistics();
+      (void)str.substr();
+      assert(stats.moved == 0);
+      assert(stats.copied == 0);
+    }
+    {
+      string str = string(alloc(&stats));
+      stats      = test_allocator_statistics();
+      (void)std::move(str).substr();
+      assert(stats.moved == 0);
+      assert(stats.copied == 0);
+    }
+  }
+
+  return true;
+}
+
+int main(int, char**) {
   test();
+  test_alloc();
 #if TEST_STD_VER > 17
   static_assert(test());
+  static_assert(test_alloc());
 #endif
 
   return 0;

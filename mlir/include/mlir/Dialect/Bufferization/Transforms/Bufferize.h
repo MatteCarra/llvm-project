@@ -28,6 +28,16 @@ class AnalysisState;
 struct BufferizationOptions;
 class OpFilter;
 
+/// Bufferization statistics for debugging. These can be printed after running
+/// the OneShotBufferizePass with `-mlir-pass-statistics`. See the pass
+/// definition for more details.
+struct BufferizationStatistics {
+  int64_t numBufferAlloc = 0;
+  int64_t numBufferDealloc = 0;
+  int64_t numTensorInPlace = 0;
+  int64_t numTensorOutOfPlace = 0;
+};
+
 /// A helper type converter class that automatically populates the relevant
 /// materializations and type conversions for bufferization.
 class BufferizeTypeConverter : public TypeConverter {
@@ -65,7 +75,24 @@ void populateEliminateBufferizeMaterializationsPatterns(
 /// can be used to implement partial bufferization passes.
 LogicalResult bufferizeOp(Operation *op, const BufferizationOptions &options,
                           bool copyBeforeWrite = true,
-                          const OpFilter *opFilter = nullptr);
+                          const OpFilter *opFilter = nullptr,
+                          BufferizationStatistics *statistics = nullptr);
+
+/// Bufferize the signature of `block` and its callers (i.e., ops that have the
+/// given block as a successor). All block argument types are changed to memref
+/// types. All corresponding operands of all callers  are wrapped in
+/// bufferization.to_memref ops. All uses of bufferized tensor block arguments
+/// are wrapped in bufferization.to_tensor ops.
+///
+/// It is expected that all callers implement the `BranchOpInterface`.
+/// Otherwise, this function will fail. The `BranchOpInterface` is used to query
+/// the range of operands that are forwarded to this block.
+///
+/// It is expected that the parent op of this block implements the
+/// `BufferizableOpInterface`. The buffer types of tensor block arguments are
+/// computed with `BufferizableOpIntercace::getBufferType`.
+LogicalResult bufferizeBlockSignature(Block *block, RewriterBase &rewriter,
+                                      const BufferizationOptions &options);
 
 BufferizationOptions getPartialBufferizationOptions();
 

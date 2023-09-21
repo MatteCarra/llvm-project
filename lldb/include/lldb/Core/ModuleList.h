@@ -440,7 +440,7 @@ public:
   bool IsEmpty() const { return !GetSize(); }
 
   bool LoadScriptingResourcesInTarget(Target *target, std::list<Status> &errors,
-                                      Stream *feedback_stream = nullptr,
+                                      Stream &feedback_stream,
                                       bool continue_on_error = true);
 
   static ModuleListProperties &GetGlobalModuleListProperties();
@@ -464,8 +464,24 @@ public:
 
   static bool RemoveSharedModuleIfOrphaned(const Module *module_ptr);
 
+  /// Applies 'callback' to each module in this ModuleList.
+  /// If 'callback' returns false, iteration terminates.
+  /// The 'module_sp' passed to 'callback' is guaranteed to
+  /// be non-null.
+  ///
+  /// This function is thread-safe.
   void ForEach(std::function<bool(const lldb::ModuleSP &module_sp)> const
                    &callback) const;
+
+  /// Returns true if 'callback' returns true for one of the modules
+  /// in this ModuleList.
+  ///
+  /// This function is thread-safe.
+  bool AnyOf(
+      std::function<bool(lldb_private::Module &module)> const &callback) const;
+
+  /// Atomically swaps the contents of this module list with \a other.
+  void Swap(ModuleList &other);
 
 protected:
   // Class typedefs.

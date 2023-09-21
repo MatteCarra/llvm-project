@@ -1,11 +1,37 @@
-// RUN: mlir-opt %s --sparse-compiler | \
-// RUN: mlir-cpu-runner \
-// RUN:  -e entry -entry-point-result=void  \
-// RUN:  -shared-libs=%mlir_lib_dir/libmlir_c_runner_utils%shlibext | \
-// RUN: FileCheck %s
+//--------------------------------------------------------------------------------------------------
+// WHEN CREATING A NEW TEST, PLEASE JUST COPY & PASTE WITHOUT EDITS.
+//
+// Set-up that's shared across all tests in this directory. In principle, this
+// config could be moved to lit.local.cfg. However, there are downstream users that
+//  do not use these LIT config files. Hence why this is kept inline.
+//
+// DEFINE: %{sparse_compiler_opts} = enable-runtime-library=true
+// DEFINE: %{sparse_compiler_opts_sve} = enable-arm-sve=true %{sparse_compiler_opts}
+// DEFINE: %{compile} = mlir-opt %s --sparse-compiler="%{sparse_compiler_opts}"
+// DEFINE: %{compile_sve} = mlir-opt %s --sparse-compiler="%{sparse_compiler_opts_sve}"
+// DEFINE: %{run_libs} = -shared-libs=%mlir_c_runner_utils,%mlir_runner_utils
+// DEFINE: %{run_opts} = -e entry -entry-point-result=void
+// DEFINE: %{run} = mlir-cpu-runner %{run_opts} %{run_libs}
+// DEFINE: %{run_sve} = %mcr_aarch64_cmd --march=aarch64 --mattr="+sve" %{run_opts} %{run_libs}
+//
+// DEFINE: %{env} =
+//--------------------------------------------------------------------------------------------------
 
-#SparseVector = #sparse_tensor.encoding<{dimLevelType = ["compressed"]}>
-#DenseVector = #sparse_tensor.encoding<{dimLevelType = ["dense"]}>
+// RUN: %{compile} | %{run} | FileCheck %s
+//
+// Do the same run, but now with direct IR generation.
+// REDEFINE: %{sparse_compiler_opts} = enable-runtime-library=false enable-buffer-initialization=true
+// RUN: %{compile} | %{run} | FileCheck %s
+//
+// Do the same run, but now with vectorization.
+// REDEFINE: %{sparse_compiler_opts} = enable-runtime-library=false enable-buffer-initialization=true vl=2 reassociate-fp-reductions=true enable-index-optimizations=true
+// RUN: %{compile} | %{run} | FileCheck %s
+//
+// Do the same run, but now with  VLA vectorization.
+// RUN: %if mlir_arm_sve_tests %{ %{compile_sve} | %{run_sve} | FileCheck %s %}
+
+#SparseVector = #sparse_tensor.encoding<{lvlTypes = ["compressed"]}>
+#DenseVector = #sparse_tensor.encoding<{lvlTypes = ["dense"]}>
 
 //
 // Traits for 1-d tensor (aka vector) operations.
@@ -140,7 +166,7 @@ module {
   func.func @dump(%arg0: tensor<?xf64, #SparseVector>) {
     // Dump the values array to verify only sparse contents are stored.
     %c0 = arith.constant 0 : index
-    %d0 = arith.constant -1.0 : f64
+    %d0 = arith.constant 0.0 : f64
     %0 = sparse_tensor.values %arg0 : tensor<?xf64, #SparseVector> to memref<?xf64>
     %1 = vector.transfer_read %0[%c0], %d0: memref<?xf64>, vector<16xf64>
     vector.print %1 : vector<16xf64>
@@ -194,17 +220,17 @@ module {
     //
     // Verify the results.
     //
-    // CHECK:      ( 1, 2, 3, 4, 5, 6, 7, 8, 9, -1, -1, -1, -1, -1, -1, -1 )
+    // CHECK:      ( 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0, 0, 0 )
     // CHECK-NEXT: ( 1, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 4, 0, 0, 5, 6, 0, 0, 0, 0, 0, 0, 7, 8, 0, 9 )
-    // CHECK-NEXT: ( 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, -1, -1, -1, -1, -1, -1 )
+    // CHECK-NEXT: ( 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 0, 0, 0, 0, 0, 0 )
     // CHECK-NEXT: ( 0, 11, 0, 12, 13, 0, 0, 0, 0, 0, 14, 0, 0, 0, 0, 0, 15, 0, 16, 0, 0, 17, 0, 0, 0, 0, 0, 0, 18, 19, 0, 20 )
-    // CHECK-NEXT: ( 2, 4, 6, 8, 10, 12, 14, 16, 18, -1, -1, -1, -1, -1, -1, -1 )
+    // CHECK-NEXT: ( 2, 4, 6, 8, 10, 12, 14, 16, 18, 0, 0, 0, 0, 0, 0, 0 )
     // CHECK-NEXT: ( 2, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 8, 0, 0, 10, 12, 0, 0, 0, 0, 0, 0, 14, 16, 0, 18 )
-    // CHECK-NEXT: ( 2, 4, 6, 8, 10, 12, 14, 16, 18, -1, -1, -1, -1, -1, -1, -1 )
+    // CHECK-NEXT: ( 2, 4, 6, 8, 10, 12, 14, 16, 18, 0, 0, 0, 0, 0, 0, 0 )
     // CHECK-NEXT: ( 2, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 8, 0, 0, 10, 12, 0, 0, 0, 0, 0, 0, 14, 16, 0, 18 )
-    // CHECK-NEXT: ( 2, 11, 16, 13, 14, 6, 15, 8, 16, 10, 29, 32, 35, 38, -1, -1 )
+    // CHECK-NEXT: ( 2, 11, 16, 13, 14, 6, 15, 8, 16, 10, 29, 32, 35, 38, 0, 0 )
     // CHECK-NEXT: ( 2, 11, 0, 16, 13, 0, 0, 0, 0, 0, 14, 6, 0, 0, 0, 0, 15, 8, 16, 0, 10, 29, 0, 0, 0, 0, 0, 0, 32, 35, 0, 38 )
-    // CHECK-NEXT: ( 48, 204, 252, 304, 360, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 )
+    // CHECK-NEXT: ( 48, 204, 252, 304, 360, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 )
     // CHECK-NEXT: ( 0, 0, 0, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 204, 0, 0, 0, 0, 0, 0, 252, 304, 0, 360 )
     // CHECK-NEXT: ( 0, 0, 0, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 204, 0, 0, 0, 0, 0, 0, 252, 304, 0, 360 )
     // CHECK-NEXT: 1169.1

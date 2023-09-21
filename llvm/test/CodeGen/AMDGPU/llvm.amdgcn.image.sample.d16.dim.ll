@@ -46,7 +46,7 @@ main_body:
   ret half %tex
 }
 
-define amdgpu_ps half @image_sample_2d_f16_tfe(<8 x i32> inreg %rsrc, <4 x i32> inreg %samp, float %s, float %t, i32 addrspace(1)* inreg %out) {
+define amdgpu_ps half @image_sample_2d_f16_tfe(<8 x i32> inreg %rsrc, <4 x i32> inreg %samp, float %s, float %t, ptr addrspace(1) inreg %out) {
 ; TONGA-LABEL: image_sample_2d_f16_tfe:
 ; TONGA:       ; %bb.0: ; %main_body
 ; TONGA-NEXT:    s_mov_b64 s[14:15], exec
@@ -108,7 +108,6 @@ define amdgpu_ps half @image_sample_2d_f16_tfe(<8 x i32> inreg %rsrc, <4 x i32> 
 ; GFX10-NEXT:    s_waitcnt vmcnt(0)
 ; GFX10-NEXT:    v_mov_b32_e32 v0, v2
 ; GFX10-NEXT:    global_store_dword v4, v3, s[12:13]
-; GFX10-NEXT:    s_waitcnt_vscnt null, 0x0
 ; GFX10-NEXT:    ; return to shader part epilog
 ;
 ; GFX11-LABEL: image_sample_2d_f16_tfe:
@@ -123,13 +122,12 @@ define amdgpu_ps half @image_sample_2d_f16_tfe(<8 x i32> inreg %rsrc, <4 x i32> 
 ; GFX11-NEXT:    s_waitcnt vmcnt(0)
 ; GFX11-NEXT:    v_mov_b32_e32 v0, v2
 ; GFX11-NEXT:    global_store_b32 v4, v3, s[12:13]
-; GFX11-NEXT:    s_waitcnt_vscnt null, 0x0
 ; GFX11-NEXT:    ; return to shader part epilog
 main_body:
   %tex = call {half,i32} @llvm.amdgcn.image.sample.2d.f16i32.f32(i32 1, float %s, float %t, <8 x i32> %rsrc, <4 x i32> %samp, i1 false, i32 1, i32 0)
   %tex.vec = extractvalue {half, i32} %tex, 0
   %tex.err = extractvalue {half, i32} %tex, 1
-  store i32 %tex.err, i32 addrspace(1)* %out, align 4
+  store i32 %tex.err, ptr addrspace(1) %out, align 4
   ret half %tex.vec
 }
 
@@ -234,9 +232,9 @@ define amdgpu_ps <2 x float> @image_sample_b_2d_v3f16(<8 x i32> inreg %rsrc, <4 
 ; TONGA-NEXT:    s_wqm_b64 exec, exec
 ; TONGA-NEXT:    s_and_b64 exec, exec, s[12:13]
 ; TONGA-NEXT:    image_sample_b v[0:2], v[0:2], s[0:7], s[8:11] dmask:0x7 d16
+; TONGA-NEXT:    s_mov_b32 s0, 0x1000504
 ; TONGA-NEXT:    s_waitcnt vmcnt(0)
-; TONGA-NEXT:    v_lshlrev_b32_e32 v1, 16, v1
-; TONGA-NEXT:    v_or_b32_sdwa v0, v0, v1 dst_sel:DWORD dst_unused:UNUSED_PAD src0_sel:WORD_0 src1_sel:DWORD
+; TONGA-NEXT:    v_perm_b32 v0, v0, v1, s0
 ; TONGA-NEXT:    v_mov_b32_e32 v1, v2
 ; TONGA-NEXT:    ; return to shader part epilog
 ;
@@ -284,9 +282,9 @@ define amdgpu_ps <4 x float> @image_sample_b_2d_v3f16_tfe(<8 x i32> inreg %rsrc,
 ; TONGA-NEXT:    v_mov_b32_e32 v6, v3
 ; TONGA-NEXT:    s_and_b64 exec, exec, s[12:13]
 ; TONGA-NEXT:    image_sample_b v[3:6], v[0:2], s[0:7], s[8:11] dmask:0x7 tfe d16
+; TONGA-NEXT:    s_mov_b32 s0, 0x1000504
 ; TONGA-NEXT:    s_waitcnt vmcnt(0)
-; TONGA-NEXT:    v_lshlrev_b32_e32 v0, 16, v4
-; TONGA-NEXT:    v_or_b32_sdwa v0, v3, v0 dst_sel:DWORD dst_unused:UNUSED_PAD src0_sel:WORD_0 src1_sel:DWORD
+; TONGA-NEXT:    v_perm_b32 v0, v3, v4, s0
 ; TONGA-NEXT:    v_mov_b32_e32 v1, v5
 ; TONGA-NEXT:    v_mov_b32_e32 v2, v6
 ; TONGA-NEXT:    ; return to shader part epilog
@@ -370,11 +368,10 @@ define amdgpu_ps <2 x float> @image_sample_b_2d_v4f16(<8 x i32> inreg %rsrc, <4 
 ; TONGA-NEXT:    s_wqm_b64 exec, exec
 ; TONGA-NEXT:    s_and_b64 exec, exec, s[12:13]
 ; TONGA-NEXT:    image_sample_b v[0:3], v[0:2], s[0:7], s[8:11] dmask:0xf d16
+; TONGA-NEXT:    s_mov_b32 s0, 0x1000504
 ; TONGA-NEXT:    s_waitcnt vmcnt(0)
-; TONGA-NEXT:    v_lshlrev_b32_e32 v1, 16, v1
-; TONGA-NEXT:    v_lshlrev_b32_e32 v3, 16, v3
-; TONGA-NEXT:    v_or_b32_sdwa v0, v0, v1 dst_sel:DWORD dst_unused:UNUSED_PAD src0_sel:WORD_0 src1_sel:DWORD
-; TONGA-NEXT:    v_or_b32_sdwa v1, v2, v3 dst_sel:DWORD dst_unused:UNUSED_PAD src0_sel:WORD_0 src1_sel:DWORD
+; TONGA-NEXT:    v_perm_b32 v0, v0, v1, s0
+; TONGA-NEXT:    v_perm_b32 v1, v2, v3, s0
 ; TONGA-NEXT:    ; return to shader part epilog
 ;
 ; GFX81-LABEL: image_sample_b_2d_v4f16:
@@ -421,11 +418,10 @@ define amdgpu_ps <4 x float> @image_sample_b_2d_v4f16_tfe(<8 x i32> inreg %rsrc,
 ; TONGA-NEXT:    v_mov_b32_e32 v7, v3
 ; TONGA-NEXT:    s_and_b64 exec, exec, s[12:13]
 ; TONGA-NEXT:    image_sample_b v[3:7], v[0:2], s[0:7], s[8:11] dmask:0xf tfe d16
+; TONGA-NEXT:    s_mov_b32 s0, 0x1000504
 ; TONGA-NEXT:    s_waitcnt vmcnt(0)
-; TONGA-NEXT:    v_lshlrev_b32_e32 v0, 16, v4
-; TONGA-NEXT:    v_lshlrev_b32_e32 v1, 16, v6
-; TONGA-NEXT:    v_or_b32_sdwa v0, v3, v0 dst_sel:DWORD dst_unused:UNUSED_PAD src0_sel:WORD_0 src1_sel:DWORD
-; TONGA-NEXT:    v_or_b32_sdwa v1, v5, v1 dst_sel:DWORD dst_unused:UNUSED_PAD src0_sel:WORD_0 src1_sel:DWORD
+; TONGA-NEXT:    v_perm_b32 v0, v3, v4, s0
+; TONGA-NEXT:    v_perm_b32 v1, v5, v6, s0
 ; TONGA-NEXT:    v_mov_b32_e32 v2, v7
 ; TONGA-NEXT:    ; return to shader part epilog
 ;

@@ -4,11 +4,11 @@
 ; through aliases. If GlobalOpt is never run, we do not see direct
 ; calls,
 
-@alias0 = hidden alias void (), void ()* @aliasee_default_vgpr64_sgpr102
+@alias0 = hidden alias void (), ptr @aliasee_default_vgpr64_sgpr102
 
 ; CHECK-LABEL: {{^}}kernel0:
 ; CHECK: .amdhsa_next_free_vgpr 53
-; CHECK-NEXT: .amdhsa_next_free_sgpr 33
+; CHECK-NEXT: .amdhsa_next_free_sgpr 36
 define amdgpu_kernel void @kernel0() #0 {
 bb:
   call void @alias0() #2

@@ -1,10 +1,17 @@
-// RUN: %libomptarget-compilexx-run-and-check-generic
+// RUN: %libomptarget-compilexx-generic -O3 && %libomptarget-run-generic
+// RUN: %libomptarget-compilexx-generic -O3 -ffast-math && \
+// RUN: %libomptarget-run-generic
+// RUN: %libomptarget-compileoptxx-generic -O3 && %libomptarget-run-generic
+// RUN: %libomptarget-compileoptxx-generic -O3 -ffast-math && \
+// RUN: %libomptarget-run-generic
 
-// Currently hangs on amdgpu
-// UNSUPPORTED: amdgcn-amd-amdhsa
-// UNSUPPORTED: amdgcn-amd-amdhsa-LTO
 // UNSUPPORTED: x86_64-pc-linux-gnu
 // UNSUPPORTED: x86_64-pc-linux-gnu-LTO
+// UNSUPPORTED: aarch64-unknown-linux-gnu
+// UNSUPPORTED: aarch64-unknown-linux-gnu-LTO
+// UNSUPPORTED: amdgcn-amd-amdhsa
+// UNSUPPORTED: nvptx64-nvidia-cuda
+// UNSUPPORTED: nvptx64-nvidia-cuda-LTO
 
 #include <cassert>
 #include <cmath>

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.13.4)
+cmake_minimum_required(VERSION 3.20.0)
 
 if(NOT DEFINED LLVM_COMMON_CMAKE_UTILS)
   set(LLVM_COMMON_CMAKE_UTILS ${CMAKE_CURRENT_SOURCE_DIR}/../cmake)
@@ -12,6 +12,14 @@ set(CMAKE_BUILD_WITH_INSTALL_NAME_DIR ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+if (LLVM_ENABLE_EH)
+  # To match with the flang guidelines we currently disable
+  # building with exception support in core LLVM.
+  message(FATAL_ERROR "Flang does not currently support building with \
+          LLVM exceptions enabled.  Please disable LLVM_ENABLE_EH when building \
+          flang.")
+endif()
 
 set(FLANG_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -38,8 +46,23 @@ endif()
 # Must go below project(..)
 include(GNUInstallDirs)
 
+# MSVC + clang-cl build requires clang_rt.builtin.${target} library
+if (MSVC AND CMAKE_CXX_COMPILER_ID MATCHES Clang)
+  include(HandleCompilerRT)
+  find_compiler_rt_library(builtins CLANG_RT_BUILTINS_LIBRARY)
+  get_filename_component(LIBDIR "${CLANG_RT_BUILTINS_LIBRARY}" DIRECTORY)
+  if (IS_DIRECTORY "${LIBDIR}")
+    link_libraries(${CLANG_RT_BUILTINS_LIBRARY})
+  endif()
+endif()
+
+if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+  message(FATAL_ERROR "flang isn't supported on 32 bit CPUs")
+endif()
+
 if (FLANG_STANDALONE_BUILD)
   set(FLANG_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
+  set(CMAKE_INCLUDE_CURRENT_DIR ON)
   if (NOT MSVC_IDE)
     set(LLVM_ENABLE_ASSERTIONS ${ENABLE_ASSERTIONS}
       CACHE BOOL "Enable assertions")
@@ -103,7 +126,7 @@ if (FLANG_STANDALONE_BUILD)
 
   option(LLVM_INSTALL_TOOLCHAIN_ONLY
     "Only include toolchain files in the 'install' target." OFF)
-  option(LLVM_FORCE_USE_OLD_HOST_TOOLCHAIN
+  option(LLVM_FORCE_USE_OLD_TOOLCHAIN
     "Set to ON to force using an old, unsupported host toolchain." OFF)
 
 
@@ -148,29 +171,12 @@ if (FLANG_STANDALONE_BUILD)
   get_errc_messages(LLVM_LIT_ERRC_MESSAGES)
 
 #Handle unittests when out-of-tree
-#LLVM_BUILD_MAIN_SRC_DIR - Path to llvm source when out-of-tree.
   set(FLANG_GTEST_AVAIL 0)
   if (FLANG_INCLUDE_TESTS)
-    set(UNITTEST_DIR ${LLVM_BUILD_MAIN_SRC_DIR}/utils/unittest)
+    set(UNITTEST_DIR ${LLVM_THIRD_PARTY_DIR}/unittest)
     if(EXISTS ${UNITTEST_DIR}/googletest/include/gtest/gtest.h)
       if (NOT TARGET llvm_gtest)
-        add_library(llvm_gtest
-          ${UNITTEST_DIR}/googletest/src/gtest-all.cc
-          ${UNITTEST_DIR}/googlemock/src/gmock-all.cc
-          )
-        target_include_directories(llvm_gtest
-          PUBLIC
-          "${UNITTEST_DIR}/googletest/include"
-          "${UNITTEST_DIR}/googlemock/include"
-
-          PRIVATE
-          "${UNITTEST_DIR}/googletest"
-          "${UNITTEST_DIR}/googlemock"
-          )
-         find_package(Threads)
-         target_link_libraries(llvm_gtest PUBLIC Threads::Threads)
-        add_library(llvm_gtest_main ${UNITTEST_DIR}/UnitTestMain/TestMain.cpp)
-        target_link_libraries(llvm_gtest_main PUBLIC llvm_gtest)
+        add_subdirectory(${UNITTEST_DIR} third-party/unittest)
       endif()
       set(FLANG_GTEST_AVAIL 1)
     else()
@@ -426,11 +432,9 @@ if (FLANG_BUILD_TOOLS)
 endif()
 add_subdirectory(runtime)
 
-option(FLANG_BUILD_EXAMPLES "Build Flang example programs by default." OFF)
-if (FLANG_BUILD_EXAMPLES AND FLANG_STANDALONE_BUILD)
-  message(FATAL_ERROR "Examples are not supported in out-of-tree builds.")
+if (LLVM_INCLUDE_EXAMPLES)
+  add_subdirectory(examples)
 endif()
-add_subdirectory(examples)
 
 if (FLANG_INCLUDE_TESTS)
   add_subdirectory(test)

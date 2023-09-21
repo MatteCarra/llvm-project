@@ -26,6 +26,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/raw_ostream.h"
+#include <optional>
 #include <sstream>
 
 using namespace llvm;
@@ -60,7 +61,7 @@ private:
 
   /// Lower a HOM_Prolog pseudo instruction into a helper call
   /// or a sequence of homogeneous stores.
-  /// When a a fp setup follows, it can be optimized.
+  /// When a fp setup follows, it can be optimized.
   bool lowerProlog(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
                    MachineBasicBlock::iterator &NextMBBI);
   /// Lower a HOM_Epilog pseudo instruction into a helper call
@@ -507,7 +508,7 @@ bool AArch64LowerHomogeneousPE::lowerProlog(
   DebugLoc DL = MI.getDebugLoc();
   SmallVector<unsigned, 8> Regs;
   int LRIdx = 0;
-  Optional<int> FpOffset;
+  std::optional<int> FpOffset;
   for (auto &MO : MI.operands()) {
     if (MO.isReg()) {
       if (MO.getReg() == AArch64::LR)

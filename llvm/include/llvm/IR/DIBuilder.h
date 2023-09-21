@@ -17,7 +17,6 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/MapVector.h"
-#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
@@ -27,6 +26,7 @@
 #include "llvm/Support/Casting.h"
 #include <algorithm>
 #include <cstdint>
+#include <optional>
 
 namespace llvm {
 
@@ -47,15 +47,14 @@ namespace llvm {
     Function *DeclareFn;     ///< llvm.dbg.declare
     Function *ValueFn;       ///< llvm.dbg.value
     Function *LabelFn;       ///< llvm.dbg.label
-    Function *AddrFn;        ///< llvm.dbg.addr
     Function *AssignFn;      ///< llvm.dbg.assign
 
     SmallVector<TrackingMDNodeRef, 4> AllEnumTypes;
     /// Track the RetainTypes, since they can be updated later on.
     SmallVector<TrackingMDNodeRef, 4> AllRetainTypes;
-    SmallVector<Metadata *, 4> AllSubprograms;
+    SmallVector<DISubprogram *, 4> AllSubprograms;
     SmallVector<Metadata *, 4> AllGVs;
-    SmallVector<TrackingMDNodeRef, 4> AllImportedModules;
+    SmallVector<TrackingMDNodeRef, 4> ImportedModules;
     /// Map Macro parent (which can be DIMacroFile or nullptr) to a list of
     /// Metadata all of type DIMacroNode.
     /// DIMacroNode's with nullptr parent are DICompileUnit direct children.
@@ -65,15 +64,25 @@ namespace llvm {
     SmallVector<TrackingMDNodeRef, 4> UnresolvedNodes;
     bool AllowUnresolvedNodes;
 
-    /// Each subprogram's preserved local variables.
+    /// Each subprogram's preserved local variables, labels and imported
+    /// entities.
     ///
     /// Do not use a std::vector.  Some versions of libc++ apparently copy
     /// instead of move on grow operations, and TrackingMDRef is expensive to
     /// copy.
-    DenseMap<MDNode *, SmallVector<TrackingMDNodeRef, 1>> PreservedVariables;
+    DenseMap<DISubprogram *, SmallVector<TrackingMDNodeRef, 4>>
+        SubprogramTrackedNodes;
 
-    /// Each subprogram's preserved labels.
-    DenseMap<MDNode *, SmallVector<TrackingMDNodeRef, 1>> PreservedLabels;
+    SmallVectorImpl<TrackingMDNodeRef> &
+    getImportTrackingVector(const DIScope *S) {
+      return isa_and_nonnull<DILocalScope>(S)
+                 ? getSubprogramNodesTrackingVector(S)
+                 : ImportedModules;
+    }
+    SmallVectorImpl<TrackingMDNodeRef> &
+    getSubprogramNodesTrackingVector(const DIScope *S) {
+      return SubprogramTrackedNodes[cast<DILocalScope>(S)->getSubprogram()];
+    }
 
     /// Create a temporary.
     ///
@@ -101,12 +110,6 @@ namespace llvm {
     insertDbgValueIntrinsic(llvm::Value *Val, DILocalVariable *VarInfo,
                             DIExpression *Expr, const DILocation *DL,
                             BasicBlock *InsertBB, Instruction *InsertBefore);
-
-    /// Internal helper for insertDbgAddrIntrinsic.
-    Instruction *
-    insertDbgAddrIntrinsic(llvm::Value *Val, DILocalVariable *VarInfo,
-                           DIExpression *Expr, const DILocation *DL,
-                           BasicBlock *InsertBB, Instruction *InsertBefore);
 
   public:
     /// Construct a builder for a module.
@@ -173,10 +176,10 @@ namespace llvm {
     /// \param Checksum  Optional checksum kind (e.g. CSK_MD5, CSK_SHA1, etc.)
     ///                  and value.
     /// \param Source    Optional source text.
-    DIFile *
-    createFile(StringRef Filename, StringRef Directory,
-               Optional<DIFile::ChecksumInfo<StringRef>> Checksum = None,
-               Optional<StringRef> Source = None);
+    DIFile *createFile(
+        StringRef Filename, StringRef Directory,
+        std::optional<DIFile::ChecksumInfo<StringRef>> Checksum = std::nullopt,
+        std::optional<StringRef> Source = std::nullopt);
 
     /// Create debugging information entry for a macro.
     /// \param Parent     Macro parent (could be nullptr).
@@ -256,7 +259,7 @@ namespace llvm {
     DIDerivedType *
     createPointerType(DIType *PointeeTy, uint64_t SizeInBits,
                       uint32_t AlignInBits = 0,
-                      Optional<unsigned> DWARFAddressSpace = None,
+                      std::optional<unsigned> DWARFAddressSpace = std::nullopt,
                       StringRef Name = "", DINodeArray Annotations = nullptr);
 
     /// Create debugging information entry for a pointer to member.
@@ -271,11 +274,10 @@ namespace llvm {
 
     /// Create debugging information entry for a c++
     /// style reference or rvalue reference type.
-    DIDerivedType *createReferenceType(unsigned Tag, DIType *RTy,
-                                       uint64_t SizeInBits = 0,
-                                       uint32_t AlignInBits = 0,
-                                       Optional<unsigned> DWARFAddressSpace =
-                                           None);
+    DIDerivedType *createReferenceType(
+        unsigned Tag, DIType *RTy, uint64_t SizeInBits = 0,
+        uint32_t AlignInBits = 0,
+        std::optional<unsigned> DWARFAddressSpace = std::nullopt);
 
     /// Create debugging information entry for a typedef.
     /// \param Ty          Original type.
@@ -519,10 +521,10 @@ namespace llvm {
     /// \param Name         Value parameter name.
     /// \param Ty           Parameter type.
     /// \param Val          The fully qualified name of the template.
-    DITemplateValueParameter *createTemplateTemplateParameter(DIScope *Scope,
-                                                              StringRef Name,
-                                                              DIType *Ty,
-                                                              StringRef Val);
+    /// \param IsDefault    Parameter is default or not.
+    DITemplateValueParameter *
+    createTemplateTemplateParameter(DIScope *Scope, StringRef Name, DIType *Ty,
+                                    StringRef Val, bool IsDefault = false);
 
     /// Create debugging information for a template parameter pack.
     /// \param Scope        Scope in which this type is defined.
@@ -732,7 +734,7 @@ namespace llvm {
     /// Create a new descriptor for the specified
     /// variable which has a complex address expression for its address.
     /// \param Addr        An array of complex address operations.
-    DIExpression *createExpression(ArrayRef<uint64_t> Addr = None);
+    DIExpression *createExpression(ArrayRef<uint64_t> Addr = std::nullopt);
 
     /// Create an expression for a variable that does not have an address, but
     /// does have a constant value.
@@ -986,30 +988,6 @@ namespace llvm {
                                          DIExpression *Expr,
                                          const DILocation *DL,
                                          Instruction *InsertBefore);
-
-    /// Insert a new llvm.dbg.addr intrinsic call.
-    /// \param Addr          llvm::Value of the address
-    /// \param VarInfo      Variable's debug info descriptor.
-    /// \param Expr         A complex location expression.
-    /// \param DL           Debug info location.
-    /// \param InsertAtEnd Location for the new intrinsic.
-    Instruction *insertDbgAddrIntrinsic(llvm::Value *Addr,
-                                        DILocalVariable *VarInfo,
-                                        DIExpression *Expr,
-                                        const DILocation *DL,
-                                        BasicBlock *InsertAtEnd);
-
-    /// Insert a new llvm.dbg.addr intrinsic call.
-    /// \param Addr         llvm::Value of the address.
-    /// \param VarInfo      Variable's debug info descriptor.
-    /// \param Expr         A complex location expression.
-    /// \param DL           Debug info location.
-    /// \param InsertBefore Location for the new intrinsic.
-    Instruction *insertDbgAddrIntrinsic(llvm::Value *Addr,
-                                        DILocalVariable *VarInfo,
-                                        DIExpression *Expr,
-                                        const DILocation *DL,
-                                        Instruction *InsertBefore);
 
     /// Replace the vtable holder in the given type.
     ///

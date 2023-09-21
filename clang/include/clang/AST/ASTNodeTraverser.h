@@ -104,7 +104,7 @@ public:
         Visit(Comment, Comment);
 
       // Decls within functions are visited by the body.
-      if (!isa<FunctionDecl>(*D) && !isa<ObjCMethodDecl>(*D)) {
+      if (!isa<FunctionDecl, ObjCMethodDecl, BlockDecl>(*D)) {
         if (Traversal != TK_AsIs) {
           if (const auto *CTSD = dyn_cast<ClassTemplateSpecializationDecl>(D)) {
             auto SK = CTSD->getSpecializationKind();
@@ -246,10 +246,14 @@ public:
                     .getTypeConstraint()
                     ->getImmediatelyDeclaredConstraint());
       } else if (auto *NR = dyn_cast<concepts::NestedRequirement>(R)) {
-        if (!NR->isSubstitutionFailure())
+        if (!NR->hasInvalidConstraint())
           Visit(NR->getConstraintExpr());
       }
     });
+  }
+
+  void Visit(const ConceptReference *R) {
+    getNodeDelegate().AddChild([=] { getNodeDelegate().Visit(R); });
   }
 
   void Visit(const APValue &Value, QualType Ty) {
@@ -288,6 +292,8 @@ public:
       Visit(C);
     else if (const auto *T = N.get<TemplateArgument>())
       Visit(*T);
+    else if (const auto *CR = N.get<ConceptReference>())
+      Visit(CR);
   }
 
   void dumpDeclContext(const DeclContext *DC) {
@@ -384,7 +390,8 @@ public:
   }
   void VisitAttributedType(const AttributedType *T) {
     // FIXME: AttrKind
-    Visit(T->getModifiedType());
+    if (T->getModifiedType() != T->getEquivalentType())
+      Visit(T->getModifiedType());
   }
   void VisitBTFTagAttributedType(const BTFTagAttributedType *T) {
     Visit(T->getWrappedType());
@@ -475,6 +482,8 @@ public:
   void VisitFileScopeAsmDecl(const FileScopeAsmDecl *D) {
     Visit(D->getAsmString());
   }
+
+  void VisitTopLevelStmtDecl(const TopLevelStmtDecl *D) { Visit(D->getStmt()); }
 
   void VisitCapturedDecl(const CapturedDecl *D) { Visit(D->getBody()); }
 
@@ -642,8 +651,15 @@ public:
   }
 
   void VisitFriendDecl(const FriendDecl *D) {
-    if (!D->getFriendType())
+    if (D->getFriendType()) {
+      // Traverse any CXXRecordDecl owned by this type, since
+      // it will not be in the parent context:
+      if (auto *ET = D->getFriendType()->getType()->getAs<ElaboratedType>())
+        if (auto *TD = ET->getOwnedTagDecl())
+          Visit(TD);
+    } else {
       Visit(D->getFriendDecl());
+    }
   }
 
   void VisitObjCMethodDecl(const ObjCMethodDecl *D) {
@@ -708,6 +724,12 @@ public:
     }
   }
 
+  void VisitCXXParenListInitExpr(const CXXParenListInitExpr *PLIE) {
+    if (auto *Filler = PLIE->getArrayFiller()) {
+      Visit(Filler, "array_filler");
+    }
+  }
+
   void VisitBlockExpr(const BlockExpr *Node) { Visit(Node->getBlockDecl()); }
 
   void VisitOpaqueValueExpr(const OpaqueValueExpr *Node) {
@@ -716,8 +738,11 @@ public:
   }
 
   void VisitGenericSelectionExpr(const GenericSelectionExpr *E) {
-    Visit(E->getControllingExpr());
-    Visit(E->getControllingExpr()->getType()); // FIXME: remove
+    if (E->isExprPredicate()) {
+      Visit(E->getControllingExpr());
+      Visit(E->getControllingExpr()->getType()); // FIXME: remove
+    } else
+      Visit(E->getControllingType()->getType());
 
     for (const auto Assoc : E->associations()) {
       Visit(Assoc);

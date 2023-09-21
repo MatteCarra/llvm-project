@@ -17,7 +17,6 @@
 #include "polly/Support/ISLTools.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseSet.h"
-#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/Sequence.h"
 #include "llvm/ADT/SetOperations.h"
 #include "llvm/ADT/SmallVector.h"
@@ -566,7 +565,7 @@ createMicroKernel(isl::schedule_node Node,
 ///
 /// We create the BLIS macro-kernel by applying a combination of tiling
 /// of dimensions of the band node and interchanging of two innermost
-/// modified dimensions. The values of of MacroKernelParams's fields are used
+/// modified dimensions. The values of MacroKernelParams's fields are used
 /// as tile sizes.
 ///
 /// @param Node The schedule node to be modified.

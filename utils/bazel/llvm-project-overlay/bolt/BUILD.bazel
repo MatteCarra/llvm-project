@@ -19,12 +19,12 @@ cc_binary(
         ":Profile",
         ":Rewrite",
         ":Utils",
+        "//llvm:AllTargetsAsmParsers",
+        "//llvm:AllTargetsDisassemblers",
         "//llvm:MC",
         "//llvm:Object",
         "//llvm:Support",
-        "//llvm:AllTargetsAsmParsers",
-        "//llvm:AllTargetsDisassemblers",
-    ]
+    ],
 )
 
 cc_binary(
@@ -35,7 +35,7 @@ cc_binary(
     deps = [
         ":Profile",
         "//llvm:Support",
-    ]
+    ],
 )
 
 cc_binary(
@@ -48,9 +48,9 @@ cc_binary(
         ":Profile",
         ":Rewrite",
         ":RuntimeLibs",
-        ":Utils",
-        ":TargetX86",
         ":TargetAArch64",
+        ":TargetX86",
+        ":Utils",
         "//llvm:AllTargetsAsmParsers",
         "//llvm:AllTargetsCodeGens",
         "//llvm:AllTargetsDisassemblers",
@@ -83,11 +83,13 @@ cc_library(
         "//llvm:DWP",
         "//llvm:DebugInfoDWARF",
         "//llvm:Demangle",
-        "//llvm:ExecutionEngine",
+        "//llvm:DWARFLinker",
+        "//llvm:JITLink",
         "//llvm:MC",
         "//llvm:MCDisassembler",
         "//llvm:MCParser",
         "//llvm:Object",
+        "//llvm:OrcShared",
         "//llvm:Support",
         "//llvm:ir_headers",
     ],
@@ -108,10 +110,10 @@ cc_library(
     srcs = glob([
         "lib/RuntimeLibs/*.cpp",
     ]),
+    includes = ["include"],
     textual_hdrs = glob([
         "include/bolt/RuntimeLibs/*.h",
     ]) + ["include/bolt/RuntimeLibs/RuntimeLibraryVariables.inc"],
-    includes = ["include"],
     deps = [
         ":Core",
         ":Passes",
@@ -122,7 +124,6 @@ cc_library(
         "//llvm:DWP",
         "//llvm:DebugInfoDWARF",
         "//llvm:Demangle",
-        "//llvm:ExecutionEngine",
         "//llvm:MC",
         "//llvm:MCDisassembler",
         "//llvm:MCParser",
@@ -155,6 +156,7 @@ cc_library(
         "//llvm:MCParser",
         "//llvm:Object",
         "//llvm:Support",
+        "//llvm:TransformUtils",
     ],
 )
 
@@ -182,6 +184,7 @@ cc_library(
         "//llvm:Object",
         "//llvm:Support",
         "//llvm:Target",
+        "//llvm:TransformUtils",
     ],
 )
 
@@ -196,8 +199,6 @@ cc_library(
     includes = ["include"],
     deps = [
         ":Core",
-        "//llvm:X86CommonTableGen",
-        "//llvm:X86UtilsAndDesc",
         "//llvm:Analysis",
         "//llvm:BinaryFormat",
         "//llvm:CodeGen",
@@ -210,6 +211,8 @@ cc_library(
         "//llvm:MCParser",
         "//llvm:Object",
         "//llvm:Support",
+        "//llvm:X86CommonTableGen",
+        "//llvm:X86UtilsAndDesc",
     ],
 )
 
@@ -265,7 +268,9 @@ cc_library(
         "//llvm:MCDisassembler",
         "//llvm:MCParser",
         "//llvm:Object",
+        "//llvm:ObjectYAML",
         "//llvm:Support",
+        "//llvm:TargetParser",
         "//llvm:ir_headers",
     ],
 )

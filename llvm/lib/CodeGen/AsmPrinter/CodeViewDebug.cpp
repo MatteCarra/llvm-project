@@ -12,13 +12,11 @@
 
 #include "CodeViewDebug.h"
 #include "llvm/ADT/APSInt.h"
-#include "llvm/ADT/None.h"
-#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallBitVector.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/TinyPtrVector.h"
-#include "llvm/ADT/Triple.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/BinaryFormat/COFF.h"
 #include "llvm/BinaryFormat/Dwarf.h"
@@ -29,6 +27,7 @@
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/CodeGen/TargetFrameLowering.h"
+#include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/Config/llvm-config.h"
@@ -67,6 +66,7 @@
 #include "llvm/Support/ScopedPrinter.h"
 #include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/Target/TargetMachine.h"
+#include "llvm/TargetParser/Triple.h"
 #include <algorithm>
 #include <cassert>
 #include <cctype>
@@ -490,10 +490,10 @@ void CodeViewDebug::recordLocalVariable(LocalVariable &&Var,
     // This variable was inlined. Associate it with the InlineSite.
     const DISubprogram *Inlinee = Var.DIVar->getScope()->getSubprogram();
     InlineSite &Site = getInlineSite(InlinedAt, Inlinee);
-    Site.InlinedLocals.emplace_back(Var);
+    Site.InlinedLocals.emplace_back(std::move(Var));
   } else {
     // This variable goes into the corresponding lexical scope.
-    ScopeVariables[LS].emplace_back(Var);
+    ScopeVariables[LS].emplace_back(std::move(Var));
   }
 }
 
@@ -560,7 +560,7 @@ void CodeViewDebug::maybeRecordLocation(const DebugLoc &DL,
 }
 
 void CodeViewDebug::emitCodeViewMagicVersion() {
-  OS.emitValueToAlignment(4);
+  OS.emitValueToAlignment(Align(4));
   OS.AddComment("Debug section magic");
   OS.emitInt32(COFF::DEBUG_SECTION_MAGIC);
 }
@@ -571,7 +571,6 @@ static SourceLanguage MapDWLangToCVLang(unsigned DWLang) {
   case dwarf::DW_LANG_C89:
   case dwarf::DW_LANG_C99:
   case dwarf::DW_LANG_C11:
-  case dwarf::DW_LANG_ObjC:
     return SourceLanguage::C;
   case dwarf::DW_LANG_C_plus_plus:
   case dwarf::DW_LANG_C_plus_plus_03:
@@ -597,6 +596,10 @@ static SourceLanguage MapDWLangToCVLang(unsigned DWLang) {
     return SourceLanguage::Swift;
   case dwarf::DW_LANG_Rust:
     return SourceLanguage::Rust;
+  case dwarf::DW_LANG_ObjC:
+    return SourceLanguage::ObjC;
+  case dwarf::DW_LANG_ObjC_plus_plus:
+    return SourceLanguage::ObjCpp;
   default:
     // There's no CodeView representation for this language, and CV doesn't
     // have an "unknown" option for the language field, so we'll use MASM,
@@ -730,7 +733,7 @@ void CodeViewDebug::emitTypeInformation() {
   TypeRecordMapping typeMapping(CVMCOS);
   Pipeline.addCallbackToPipeline(typeMapping);
 
-  Optional<TypeIndex> B = Table.getFirst();
+  std::optional<TypeIndex> B = Table.getFirst();
   while (B) {
     // This will fail if the record data is invalid.
     CVType Record = Table.getType(*B);
@@ -754,13 +757,13 @@ void CodeViewDebug::emitTypeGlobalHashes() {
   // hardcoded to version 0, SHA1.
   OS.switchSection(Asm->getObjFileLowering().getCOFFGlobalTypeHashesSection());
 
-  OS.emitValueToAlignment(4);
+  OS.emitValueToAlignment(Align(4));
   OS.AddComment("Magic");
   OS.emitInt32(COFF::DEBUG_HASHES_SECTION_MAGIC);
   OS.AddComment("Section Version");
   OS.emitInt16(0);
   OS.AddComment("Hash Algorithm");
-  OS.emitInt16(uint16_t(GlobalTypeHashAlg::SHA1_8));
+  OS.emitInt16(uint16_t(GlobalTypeHashAlg::BLAKE3));
 
   TypeIndex TI(TypeIndex::FirstNonSimpleIndex);
   for (const auto &GHR : TypeTable.hashes()) {
@@ -790,7 +793,6 @@ void CodeViewDebug::emitObjName() {
     // Don't emit the filename if we're writing to stdout or to /dev/null.
     PathRef = {};
   } else {
-    llvm::sys::path::remove_dots(PathStore, /*remove_dot_dot=*/true);
     PathRef = PathStore;
   }
 
@@ -1160,7 +1162,14 @@ void CodeViewDebug::emitDebugInfoForFunction(const Function *GV,
     OS.AddComment("Function section index");
     OS.emitCOFFSectionIndex(Fn);
     OS.AddComment("Flags");
-    OS.emitInt8(0);
+    ProcSymFlags ProcFlags = ProcSymFlags::HasOptimizedDebugInfo;
+    if (FI.HasFramePointer)
+      ProcFlags |= ProcSymFlags::HasFP;
+    if (GV->hasFnAttribute(Attribute::NoReturn))
+      ProcFlags |= ProcSymFlags::IsNoReturn;
+    if (GV->hasFnAttribute(Attribute::NoInline))
+      ProcFlags |= ProcSymFlags::IsNoInline;
+    OS.emitInt8(static_cast<uint8_t>(ProcFlags));
     // Emit the function display name as a null-terminated string.
     OS.AddComment("Function name");
     // Truncate the name so we won't overflow the record length field.
@@ -1236,6 +1245,8 @@ void CodeViewDebug::emitDebugInfoForFunction(const Function *GV,
     if (SP != nullptr)
       emitDebugInfoForUDTs(LocalUDTs);
 
+    emitDebugInfoForJumpTables(FI);
+
     // We're done with this function.
     emitEndSymbolRecord(SymbolKind::S_PROC_ID_END);
   }
@@ -1264,7 +1275,8 @@ void CodeViewDebug::collectVariableInfoFromMFTable(
   const TargetFrameLowering *TFI = TSI.getFrameLowering();
   const TargetRegisterInfo *TRI = TSI.getRegisterInfo();
 
-  for (const MachineFunction::VariableDbgInfo &VI : MF.getVariableDbgInfo()) {
+  for (const MachineFunction::VariableDbgInfo &VI :
+       MF.getInStackSlotVariableDbgInfo()) {
     if (!VI.Var)
       continue;
     assert(VI.Var->isValidLocationForIntrinsic(VI.Loc) &&
@@ -1292,7 +1304,8 @@ void CodeViewDebug::collectVariableInfoFromMFTable(
 
     // Get the frame register used and the offset.
     Register FrameReg;
-    StackOffset FrameOffset = TFI->getFrameIndexReference(*Asm->MF, VI.Slot, FrameReg);
+    StackOffset FrameOffset =
+        TFI->getFrameIndexReference(*Asm->MF, VI.getStackSlot(), FrameReg);
     uint16_t CVReg = TRI->getCodeViewRegNum(FrameReg);
 
     assert(!FrameOffset.getScalable() &&
@@ -1340,10 +1353,20 @@ void CodeViewDebug::calculateRanges(
     assert(DVInst->isDebugValue() && "Invalid History entry");
     // FIXME: Find a way to represent constant variables, since they are
     // relatively common.
-    Optional<DbgVariableLocation> Location =
+    std::optional<DbgVariableLocation> Location =
         DbgVariableLocation::extractFromMachineInstruction(*DVInst);
     if (!Location)
+    {
+      // When we don't have a location this is usually because LLVM has
+      // transformed it into a constant and we only have an llvm.dbg.value. We
+      // can't represent these well in CodeView since S_LOCAL only works on
+      // registers and memory locations. Instead, we will pretend this to be a
+      // constant value to at least have it show up in the debugger.
+      auto Op = DVInst->getDebugOperand(0);
+      if (Op.isImm())
+        Var.ConstantValue = APSInt(APInt(64, Op.getImm()), false);
       continue;
+    }
 
     // CodeView can only express variables in register and variables in memory
     // at a constant offset from a register. However, for variables passed
@@ -1468,6 +1491,7 @@ void CodeViewDebug::beginFunctionImpl(const MachineFunction *MF) {
       CurFn->EncodedLocalFramePtrReg = EncodedFramePtrReg::StackPtr;
       CurFn->EncodedParamFramePtrReg = EncodedFramePtrReg::StackPtr;
     } else {
+      CurFn->HasFramePointer = true;
       // If there is an FP, parameters are always relative to it.
       CurFn->EncodedParamFramePtrReg = EncodedFramePtrReg::FramePtr;
       if (CurFn->HasStackRealignment) {
@@ -1558,6 +1582,11 @@ void CodeViewDebug::beginFunctionImpl(const MachineFunction *MF) {
       }
     }
   }
+
+  // Mark branches that may potentially be using jump tables with labels.
+  bool isThumb = Triple(MMI->getModule()->getTargetTriple()).getArch() ==
+                 llvm::Triple::ArchType::thumb;
+  discoverJumpTableBranches(MF, isThumb);
 }
 
 static bool shouldEmitUdt(const DIType *T) {
@@ -1709,12 +1738,13 @@ TypeIndex CodeViewDebug::lowerTypeArray(const DICompositeType *Ty) {
     // Otherwise, if it has an upperboud, use (upperbound - lowerbound + 1),
     // where lowerbound is from the LowerBound field of the Subrange,
     // or the language default lowerbound if that field is unspecified.
-    if (auto *CI = Subrange->getCount().dyn_cast<ConstantInt *>())
+    if (auto *CI = dyn_cast_if_present<ConstantInt *>(Subrange->getCount()))
       Count = CI->getSExtValue();
-    else if (auto *UI = Subrange->getUpperBound().dyn_cast<ConstantInt *>()) {
+    else if (auto *UI = dyn_cast_if_present<ConstantInt *>(
+                 Subrange->getUpperBound())) {
       // Fortran uses 1 as the default lowerbound; other languages use 0.
       int64_t Lowerbound = (moduleIsInFortran()) ? 1 : 0;
-      auto *LI = Subrange->getLowerBound().dyn_cast<ConstantInt *>();
+      auto *LI = dyn_cast_if_present<ConstantInt *>(Subrange->getLowerBound());
       Lowerbound = (LI) ? LI->getSExtValue() : Lowerbound;
       Count = UI->getSExtValue() - Lowerbound + 1;
     }
@@ -1785,12 +1815,14 @@ TypeIndex CodeViewDebug::lowerTypeBasic(const DIBasicType *Ty) {
     }
     break;
   case dwarf::DW_ATE_complex_float:
+    // The CodeView size for a complex represents the size of
+    // an individual component.
     switch (ByteSize) {
-    case 2:  STK = SimpleTypeKind::Complex16;  break;
-    case 4:  STK = SimpleTypeKind::Complex32;  break;
-    case 8:  STK = SimpleTypeKind::Complex64;  break;
-    case 10: STK = SimpleTypeKind::Complex80;  break;
-    case 16: STK = SimpleTypeKind::Complex128; break;
+    case 4:  STK = SimpleTypeKind::Complex16;  break;
+    case 8:  STK = SimpleTypeKind::Complex32;  break;
+    case 16: STK = SimpleTypeKind::Complex64;  break;
+    case 20: STK = SimpleTypeKind::Complex80;  break;
+    case 32: STK = SimpleTypeKind::Complex128; break;
     }
     break;
   case dwarf::DW_ATE_float:
@@ -2034,9 +2066,9 @@ TypeIndex CodeViewDebug::lowerTypeFunction(const DISubroutineType *Ty) {
     ReturnAndArgTypeIndices.back() = TypeIndex::None();
   }
   TypeIndex ReturnTypeIndex = TypeIndex::Void();
-  ArrayRef<TypeIndex> ArgTypeIndices = None;
+  ArrayRef<TypeIndex> ArgTypeIndices = std::nullopt;
   if (!ReturnAndArgTypeIndices.empty()) {
-    auto ReturnAndArgTypesRef = makeArrayRef(ReturnAndArgTypeIndices);
+    auto ReturnAndArgTypesRef = ArrayRef(ReturnAndArgTypeIndices);
     ReturnTypeIndex = ReturnAndArgTypesRef.front();
     ArgTypeIndices = ReturnAndArgTypesRef.drop_front();
   }
@@ -2788,9 +2820,19 @@ void CodeViewDebug::emitLocalVariableList(const FunctionInfo &FI,
     emitLocalVariable(FI, *L);
 
   // Next emit all non-parameters in the order that we found them.
-  for (const LocalVariable &L : Locals)
-    if (!L.DIVar->isParameter())
-      emitLocalVariable(FI, L);
+  for (const LocalVariable &L : Locals) {
+    if (!L.DIVar->isParameter()) {
+      if (L.ConstantValue) {
+        // If ConstantValue is set we will emit it as a S_CONSTANT instead of a
+        // S_LOCAL in order to be able to represent it at all.
+        const DIType *Ty = L.DIVar->getType();
+        APSInt Val(*L.ConstantValue);
+        emitConstantSymbolRecord(Ty, Val, std::string(L.DIVar->getName()));
+      } else {
+        emitLocalVariable(FI, L);
+      }
+    }
+  }
 }
 
 void CodeViewDebug::emitLocalVariable(const FunctionInfo &FI,
@@ -2991,7 +3033,7 @@ void CodeViewDebug::collectLexicalBlockInfo(
   if (!BlockInsertion.second)
     return;
 
-  // Create a lexical block containing the variables and collect the the
+  // Create a lexical block containing the variables and collect the
   // lexical block information for the children.
   const InsnRange &Range = Ranges.front();
   assert(Range.first && Range.second);
@@ -3049,6 +3091,10 @@ void CodeViewDebug::endFunctionImpl(const MachineFunction *MF) {
       }
     }
   }
+
+  bool isThumb = Triple(MMI->getModule()->getTargetTriple()).getArch() ==
+                 llvm::Triple::ArchType::thumb;
+  collectDebugInfoForJumpTables(MF, isThumb);
 
   CurFn->Annotations = MF->getCodeViewAnnotations();
 
@@ -3109,7 +3155,7 @@ MCSymbol *CodeViewDebug::beginCVSubsection(DebugSubsectionKind Kind) {
 void CodeViewDebug::endCVSubsection(MCSymbol *EndLabel) {
   OS.emitLabel(EndLabel);
   // Every subsection must be aligned to a 4-byte boundary.
-  OS.emitValueToAlignment(4);
+  OS.emitValueToAlignment(Align(4));
 }
 
 static StringRef getSymbolName(SymbolKind SymKind) {
@@ -3136,7 +3182,7 @@ void CodeViewDebug::endSymbolRecord(MCSymbol *SymEnd) {
   // an extra copy of every symbol record in LLD. This increases object file
   // size by less than 1% in the clang build, and is compatible with the Visual
   // C++ linker.
-  OS.emitValueToAlignment(4);
+  OS.emitValueToAlignment(Align(4));
   OS.emitLabel(SymEnd);
 }
 
@@ -3261,7 +3307,7 @@ void CodeViewDebug::emitDebugInfoForGlobals() {
   // Second, emit each global that is in a comdat into its own .debug$S
   // section along with its own symbol substream.
   for (const CVGlobalVariable &CVGV : ComdatVariables) {
-    const GlobalVariable *GV = CVGV.GVInfo.get<const GlobalVariable *>();
+    const GlobalVariable *GV = cast<const GlobalVariable *>(CVGV.GVInfo);
     MCSymbol *GVSym = Asm->getSymbol(GV);
     OS.AddComment("Symbol subsection for " +
                   Twine(GlobalValue::dropLLVMManglingEscape(GV->getName())));
@@ -3370,7 +3416,7 @@ void CodeViewDebug::emitDebugInfoForGlobal(const CVGlobalVariable &CVGV) {
           : getFullyQualifiedName(Scope, DIGV->getName());
 
   if (const GlobalVariable *GV =
-          CVGV.GVInfo.dyn_cast<const GlobalVariable *>()) {
+          dyn_cast_if_present<const GlobalVariable *>(CVGV.GVInfo)) {
     // DataSym record, see SymbolRecord.h for more info. Thread local data
     // happens to have the same format as global data.
     MCSymbol *GVSym = Asm->getSymbol(GV);
@@ -3385,7 +3431,7 @@ void CodeViewDebug::emitDebugInfoForGlobal(const CVGlobalVariable &CVGV) {
     OS.AddComment("DataOffset");
 
     uint64_t Offset = 0;
-    if (CVGlobalVariableOffsets.find(DIGV) != CVGlobalVariableOffsets.end())
+    if (CVGlobalVariableOffsets.contains(DIGV))
       // Use the offset seen while collecting info on globals.
       Offset = CVGlobalVariableOffsets[DIGV];
     OS.emitCOFFSecRel32(GVSym, Offset);
@@ -3397,7 +3443,7 @@ void CodeViewDebug::emitDebugInfoForGlobal(const CVGlobalVariable &CVGV) {
     emitNullTerminatedSymbolName(OS, QualifiedName, LengthOfDataRecord);
     endSymbolRecord(DataEnd);
   } else {
-    const DIExpression *DIE = CVGV.GVInfo.get<const DIExpression *>();
+    const DIExpression *DIE = cast<const DIExpression *>(CVGV.GVInfo);
     assert(DIE->isConstant() &&
            "Global constant variables must contain a constant expression.");
 
@@ -3407,5 +3453,138 @@ void CodeViewDebug::emitDebugInfoForGlobal(const CVGlobalVariable &CVGV) {
                           : DebugHandlerBase::isUnsignedDIType(DIGV->getType());
     APSInt Value(APInt(/*BitWidth=*/64, DIE->getElement(1)), isUnsigned);
     emitConstantSymbolRecord(DIGV->getType(), Value, QualifiedName);
+  }
+}
+
+void forEachJumpTableBranch(
+    const MachineFunction *MF, bool isThumb,
+    const std::function<void(const MachineJumpTableInfo &, const MachineInstr &,
+                             int64_t)> &Callback) {
+  auto JTI = MF->getJumpTableInfo();
+  if (JTI && !JTI->isEmpty()) {
+#ifndef NDEBUG
+    auto UsedJTs = llvm::SmallBitVector(JTI->getJumpTables().size());
+#endif
+    for (const auto &MBB : *MF) {
+      // Search for indirect branches...
+      const auto LastMI = MBB.getFirstTerminator();
+      if (LastMI != MBB.end() && LastMI->isIndirectBranch()) {
+        if (isThumb) {
+          // ... that directly use jump table operands.
+          // NOTE: ARM uses pattern matching to lower its BR_JT SDNode to
+          // machine instructions, hence inserting a JUMP_TABLE_DEBUG_INFO node
+          // interferes with this process *but* the resulting pseudo-instruction
+          // uses a Jump Table operand, so extract the jump table index directly
+          // from that.
+          for (const auto &MO : LastMI->operands()) {
+            if (MO.isJTI()) {
+              unsigned Index = MO.getIndex();
+#ifndef NDEBUG
+              UsedJTs.set(Index);
+#endif
+              Callback(*JTI, *LastMI, Index);
+              break;
+            }
+          }
+        } else {
+          // ... that have jump table debug info.
+          // NOTE: The debug info is inserted as a JUMP_TABLE_DEBUG_INFO node
+          // when lowering the BR_JT SDNode to an indirect branch.
+          for (auto I = MBB.instr_rbegin(), E = MBB.instr_rend(); I != E; ++I) {
+            if (I->isJumpTableDebugInfo()) {
+              unsigned Index = I->getOperand(0).getImm();
+#ifndef NDEBUG
+              UsedJTs.set(Index);
+#endif
+              Callback(*JTI, *LastMI, Index);
+              break;
+            }
+          }
+        }
+      }
+    }
+#ifndef NDEBUG
+    assert(UsedJTs.all() &&
+           "Some of jump tables were not used in a debug info instruction");
+#endif
+  }
+}
+
+void CodeViewDebug::discoverJumpTableBranches(const MachineFunction *MF,
+                                              bool isThumb) {
+  forEachJumpTableBranch(
+      MF, isThumb,
+      [this](const MachineJumpTableInfo &, const MachineInstr &BranchMI,
+             int64_t) { requestLabelBeforeInsn(&BranchMI); });
+}
+
+void CodeViewDebug::collectDebugInfoForJumpTables(const MachineFunction *MF,
+                                                  bool isThumb) {
+  forEachJumpTableBranch(
+      MF, isThumb,
+      [this, MF](const MachineJumpTableInfo &JTI, const MachineInstr &BranchMI,
+                 int64_t JumpTableIndex) {
+        // For label-difference jump tables, find the base expression.
+        // Otherwise the jump table uses an absolute address (so no base
+        // is required).
+        const MCSymbol *Base;
+        uint64_t BaseOffset = 0;
+        const MCSymbol *Branch = getLabelBeforeInsn(&BranchMI);
+        JumpTableEntrySize EntrySize;
+        switch (JTI.getEntryKind()) {
+        case MachineJumpTableInfo::EK_Custom32:
+        case MachineJumpTableInfo::EK_GPRel32BlockAddress:
+        case MachineJumpTableInfo::EK_GPRel64BlockAddress:
+          llvm_unreachable(
+              "EK_Custom32, EK_GPRel32BlockAddress, and "
+              "EK_GPRel64BlockAddress should never be emitted for COFF");
+        case MachineJumpTableInfo::EK_BlockAddress:
+          // Each entry is an absolute address.
+          EntrySize = JumpTableEntrySize::Pointer;
+          Base = nullptr;
+          break;
+        case MachineJumpTableInfo::EK_Inline:
+        case MachineJumpTableInfo::EK_LabelDifference32:
+        case MachineJumpTableInfo::EK_LabelDifference64:
+          // Ask the AsmPrinter.
+          std::tie(Base, BaseOffset, Branch, EntrySize) =
+              Asm->getCodeViewJumpTableInfo(JumpTableIndex, &BranchMI, Branch);
+          break;
+        }
+
+        CurFn->JumpTables.push_back(
+            {EntrySize, Base, BaseOffset, Branch,
+             MF->getJTISymbol(JumpTableIndex, MMI->getContext()),
+             JTI.getJumpTables()[JumpTableIndex].MBBs.size()});
+      });
+}
+
+void CodeViewDebug::emitDebugInfoForJumpTables(const FunctionInfo &FI) {
+  for (auto JumpTable : FI.JumpTables) {
+    MCSymbol *JumpTableEnd = beginSymbolRecord(SymbolKind::S_ARMSWITCHTABLE);
+    if (JumpTable.Base) {
+      OS.AddComment("Base offset");
+      OS.emitCOFFSecRel32(JumpTable.Base, JumpTable.BaseOffset);
+      OS.AddComment("Base section index");
+      OS.emitCOFFSectionIndex(JumpTable.Base);
+    } else {
+      OS.AddComment("Base offset");
+      OS.emitInt32(0);
+      OS.AddComment("Base section index");
+      OS.emitInt16(0);
+    }
+    OS.AddComment("Switch type");
+    OS.emitInt16(static_cast<uint16_t>(JumpTable.EntrySize));
+    OS.AddComment("Branch offset");
+    OS.emitCOFFSecRel32(JumpTable.Branch, /*Offset=*/0);
+    OS.AddComment("Table offset");
+    OS.emitCOFFSecRel32(JumpTable.Table, /*Offset=*/0);
+    OS.AddComment("Branch section index");
+    OS.emitCOFFSectionIndex(JumpTable.Branch);
+    OS.AddComment("Table section index");
+    OS.emitCOFFSectionIndex(JumpTable.Table);
+    OS.AddComment("Entries count");
+    OS.emitInt32(JumpTable.TableSize);
+    endSymbolRecord(JumpTableEnd);
   }
 }

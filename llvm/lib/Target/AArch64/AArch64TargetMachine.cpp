@@ -20,8 +20,8 @@
 #include "MCTargetDesc/AArch64MCTargetDesc.h"
 #include "TargetInfo/AArch64TargetInfo.h"
 #include "llvm/ADT/STLExtras.h"
-#include "llvm/ADT/Triple.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
+#include "llvm/Analysis/ValueTracking.h"
 #include "llvm/CodeGen/CFIFixup.h"
 #include "llvm/CodeGen/CSEConfigBase.h"
 #include "llvm/CodeGen/GlobalISel/CSEInfo.h"
@@ -47,9 +47,11 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/Target/TargetOptions.h"
+#include "llvm/TargetParser/Triple.h"
 #include "llvm/Transforms/CFGuard.h"
 #include "llvm/Transforms/Scalar.h"
 #include <memory>
+#include <optional>
 #include <string>
 
 using namespace llvm;
@@ -128,7 +130,12 @@ static cl::opt<bool>
 static cl::opt<bool>
     EnableGEPOpt("aarch64-enable-gep-opt", cl::Hidden,
                  cl::desc("Enable optimizations on complex GEPs"),
-                 cl::init(true));
+                 cl::init(false));
+
+static cl::opt<bool>
+    EnableSelectOpt("aarch64-select-opt", cl::Hidden,
+                    cl::desc("Enable select to branch optimizations"),
+                    cl::init(true));
 
 static cl::opt<bool>
     BranchRelaxation("aarch64-enable-branch-relax", cl::Hidden, cl::init(true),
@@ -209,7 +216,6 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeAArch64Target() {
   initializeAArch64ConditionOptimizerPass(*PR);
   initializeAArch64DeadRegisterDefinitionsPass(*PR);
   initializeAArch64ExpandPseudoPass(*PR);
-  initializeAArch64KCFIPass(*PR);
   initializeAArch64LoadStoreOptPass(*PR);
   initializeAArch64MIPeepholeOptPass(*PR);
   initializeAArch64SIMDInstrOptPass(*PR);
@@ -224,6 +230,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeAArch64Target() {
   initializeFalkorHWPFFixPass(*PR);
   initializeFalkorMarkStridedAccessesLegacyPass(*PR);
   initializeLDTLSCleanupPass(*PR);
+  initializeKCFIPass(*PR);
   initializeSMEABIPass(*PR);
   initializeSVEIntrinsicOptsPass(*PR);
   initializeAArch64SpeculationHardeningPass(*PR);
@@ -231,6 +238,8 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeAArch64Target() {
   initializeAArch64StackTaggingPass(*PR);
   initializeAArch64StackTaggingPreRAPass(*PR);
   initializeAArch64LowerHomogeneousPrologEpilogPass(*PR);
+  initializeAArch64DAGToDAGISelPass(*PR);
+  initializeAArch64GlobalsTaggingPass(*PR);
 }
 
 //===----------------------------------------------------------------------===//
@@ -269,7 +278,7 @@ static StringRef computeDefaultCPU(const Triple &TT, StringRef CPU) {
 }
 
 static Reloc::Model getEffectiveRelocModel(const Triple &TT,
-                                           Optional<Reloc::Model> RM) {
+                                           std::optional<Reloc::Model> RM) {
   // AArch64 Darwin and Windows are always PIC.
   if (TT.isOSDarwin() || TT.isOSWindows())
     return Reloc::PIC_;
@@ -282,8 +291,8 @@ static Reloc::Model getEffectiveRelocModel(const Triple &TT,
 }
 
 static CodeModel::Model
-getEffectiveAArch64CodeModel(const Triple &TT, Optional<CodeModel::Model> CM,
-                             bool JIT) {
+getEffectiveAArch64CodeModel(const Triple &TT,
+                             std::optional<CodeModel::Model> CM, bool JIT) {
   if (CM) {
     if (*CM != CodeModel::Small && *CM != CodeModel::Tiny &&
         *CM != CodeModel::Large) {
@@ -309,8 +318,8 @@ getEffectiveAArch64CodeModel(const Triple &TT, Optional<CodeModel::Model> CM,
 AArch64TargetMachine::AArch64TargetMachine(const Target &T, const Triple &TT,
                                            StringRef CPU, StringRef FS,
                                            const TargetOptions &Options,
-                                           Optional<Reloc::Model> RM,
-                                           Optional<CodeModel::Model> CM,
+                                           std::optional<Reloc::Model> RM,
+                                           std::optional<CodeModel::Model> CM,
                                            CodeGenOpt::Level OL, bool JIT,
                                            bool LittleEndian)
     : LLVMTargetMachine(T,
@@ -379,27 +388,21 @@ AArch64TargetMachine::getSubtargetImpl(const Function &F) const {
   Attribute TuneAttr = F.getFnAttribute("tune-cpu");
   Attribute FSAttr = F.getFnAttribute("target-features");
 
-  std::string CPU =
-      CPUAttr.isValid() ? CPUAttr.getValueAsString().str() : TargetCPU;
-  std::string TuneCPU =
-      TuneAttr.isValid() ? TuneAttr.getValueAsString().str() : CPU;
-  std::string FS =
-      FSAttr.isValid() ? FSAttr.getValueAsString().str() : TargetFS;
+  StringRef CPU = CPUAttr.isValid() ? CPUAttr.getValueAsString() : TargetCPU;
+  StringRef TuneCPU = TuneAttr.isValid() ? TuneAttr.getValueAsString() : CPU;
+  StringRef FS = FSAttr.isValid() ? FSAttr.getValueAsString() : TargetFS;
 
-  SmallString<512> Key;
-
-  bool StreamingSVEModeDisabled =
-      !F.hasFnAttribute("aarch64_pstate_sm_enabled") &&
-      !F.hasFnAttribute("aarch64_pstate_sm_compatible") &&
-      !F.hasFnAttribute("aarch64_pstate_sm_body");
+  bool StreamingSVEMode = F.hasFnAttribute("aarch64_pstate_sm_enabled") ||
+                          F.hasFnAttribute("aarch64_pstate_sm_body");
+  bool StreamingCompatibleSVEMode =
+      F.hasFnAttribute("aarch64_pstate_sm_compatible");
 
   unsigned MinSVEVectorSize = 0;
   unsigned MaxSVEVectorSize = 0;
-  Attribute VScaleRangeAttr = F.getFnAttribute(Attribute::VScaleRange);
-  if (VScaleRangeAttr.isValid()) {
-    Optional<unsigned> VScaleMax = VScaleRangeAttr.getVScaleRangeMax();
-    MinSVEVectorSize = VScaleRangeAttr.getVScaleRangeMin() * 128;
-    MaxSVEVectorSize = VScaleMax ? *VScaleMax * 128 : 0;
+  if (F.hasFnAttribute(Attribute::VScaleRange)) {
+    ConstantRange CR = getVScaleRange(&F, 64);
+    MinSVEVectorSize = CR.getUnsignedMin().getZExtValue() * 128;
+    MaxSVEVectorSize = CR.getUnsignedMax().getZExtValue() * 128;
   } else {
     MinSVEVectorSize = SVEVectorBitsMinOpt;
     MaxSVEVectorSize = SVEVectorBitsMaxOpt;
@@ -413,23 +416,18 @@ AArch64TargetMachine::getSubtargetImpl(const Function &F) const {
          "Minimum SVE vector size should not be larger than its maximum!");
 
   // Sanitize user input in case of no asserts
-  if (MaxSVEVectorSize == 0)
-    MinSVEVectorSize = (MinSVEVectorSize / 128) * 128;
-  else {
-    MinSVEVectorSize =
-        (std::min(MinSVEVectorSize, MaxSVEVectorSize) / 128) * 128;
-    MaxSVEVectorSize =
-        (std::max(MinSVEVectorSize, MaxSVEVectorSize) / 128) * 128;
+  if (MaxSVEVectorSize != 0) {
+    MinSVEVectorSize = std::min(MinSVEVectorSize, MaxSVEVectorSize);
+    MaxSVEVectorSize = std::max(MinSVEVectorSize, MaxSVEVectorSize);
   }
 
-  Key += "SVEMin";
-  Key += std::to_string(MinSVEVectorSize);
-  Key += "SVEMax";
-  Key += std::to_string(MaxSVEVectorSize);
-  Key += "StreamingSVEModeDisabled=" + std::to_string(StreamingSVEModeDisabled);
-  Key += CPU;
-  Key += TuneCPU;
-  Key += FS;
+  SmallString<512> Key;
+  raw_svector_ostream(Key) << "SVEMin" << MinSVEVectorSize << "SVEMax"
+                           << MaxSVEVectorSize
+                           << "StreamingSVEMode=" << StreamingSVEMode
+                           << "StreamingCompatibleSVEMode="
+                           << StreamingCompatibleSVEMode << CPU << TuneCPU
+                           << FS;
 
   auto &I = SubtargetMap[Key];
   if (!I) {
@@ -439,8 +437,12 @@ AArch64TargetMachine::getSubtargetImpl(const Function &F) const {
     resetTargetOptions(F);
     I = std::make_unique<AArch64Subtarget>(
         TargetTriple, CPU, TuneCPU, FS, *this, isLittle, MinSVEVectorSize,
-        MaxSVEVectorSize, StreamingSVEModeDisabled);
+        MaxSVEVectorSize, StreamingSVEMode, StreamingCompatibleSVEMode);
   }
+
+  assert((!StreamingSVEMode || I->hasSME()) &&
+         "Expected SME to be available");
+
   return I.get();
 }
 
@@ -448,16 +450,16 @@ void AArch64leTargetMachine::anchor() { }
 
 AArch64leTargetMachine::AArch64leTargetMachine(
     const Target &T, const Triple &TT, StringRef CPU, StringRef FS,
-    const TargetOptions &Options, Optional<Reloc::Model> RM,
-    Optional<CodeModel::Model> CM, CodeGenOpt::Level OL, bool JIT)
+    const TargetOptions &Options, std::optional<Reloc::Model> RM,
+    std::optional<CodeModel::Model> CM, CodeGenOpt::Level OL, bool JIT)
     : AArch64TargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, JIT, true) {}
 
 void AArch64beTargetMachine::anchor() { }
 
 AArch64beTargetMachine::AArch64beTargetMachine(
     const Target &T, const Triple &TT, StringRef CPU, StringRef FS,
-    const TargetOptions &Options, Optional<Reloc::Model> RM,
-    Optional<CodeModel::Model> CM, CodeGenOpt::Level OL, bool JIT)
+    const TargetOptions &Options, std::optional<Reloc::Model> RM,
+    std::optional<CodeModel::Model> CM, CodeGenOpt::Level OL, bool JIT)
     : AArch64TargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, JIT, false) {}
 
 namespace {
@@ -511,7 +513,6 @@ public:
   bool addLegalizeMachineIR() override;
   void addPreRegBankSelect() override;
   bool addRegBankSelect() override;
-  void addPreGlobalInstructionSelect() override;
   bool addGlobalInstructionSelect() override;
   void addMachineSSAOptimization() override;
   bool addILPOpts() override;
@@ -519,6 +520,7 @@ public:
   void addPostRegAlloc() override;
   void addPreSched2() override;
   void addPreEmitPass() override;
+  void addPostBBSections() override;
   void addPreEmitPass2() override;
 
   std::unique_ptr<CSEConfigBase> getCSEConfig() const override;
@@ -586,8 +588,16 @@ void AArch64PassConfig::addIRPasses() {
 
   TargetPassConfig::addIRPasses();
 
+  if (getOptLevel() == CodeGenOpt::Aggressive && EnableSelectOpt)
+    addPass(createSelectOptimizePass());
+
+  addPass(createAArch64GlobalsTaggingPass());
   addPass(createAArch64StackTaggingPass(
       /*IsOptNone=*/TM->getOptLevel() == CodeGenOpt::None));
+
+  // Match complex arithmetic patterns
+  if (TM->getOptLevel() >= CodeGenOpt::Default)
+    addPass(createComplexDeinterleavingPass(TM));
 
   // Match interleaved memory accesses to ldN/stN intrinsics.
   if (TM->getOptLevel() != CodeGenOpt::None) {
@@ -643,7 +653,7 @@ bool AArch64PassConfig::addPreISel() {
 
 void AArch64PassConfig::addCodeGenPrepare() {
   if (getOptLevel() != CodeGenOpt::None)
-    addPass(createTypePromotionPass());
+    addPass(createTypePromotionLegacyPass());
   TargetPassConfig::addCodeGenPrepare();
 }
 
@@ -665,10 +675,12 @@ bool AArch64PassConfig::addIRTranslator() {
 }
 
 void AArch64PassConfig::addPreLegalizeMachineIR() {
-  if (getOptLevel() == CodeGenOpt::None)
+  if (getOptLevel() == CodeGenOpt::None) {
     addPass(createAArch64O0PreLegalizerCombiner());
-  else {
+    addPass(new Localizer());
+  } else {
     addPass(createAArch64PreLegalizerCombiner());
+    addPass(new Localizer());
     if (EnableGISelLoadStoreOptPreLegal)
       addPass(new LoadStoreOpt());
   }
@@ -692,10 +704,6 @@ void AArch64PassConfig::addPreRegBankSelect() {
 bool AArch64PassConfig::addRegBankSelect() {
   addPass(new RegBankSelect());
   return false;
-}
-
-void AArch64PassConfig::addPreGlobalInstructionSelect() {
-  addPass(new Localizer());
 }
 
 bool AArch64PassConfig::addGlobalInstructionSelect() {
@@ -768,7 +776,7 @@ void AArch64PassConfig::addPreSched2() {
       addPass(createAArch64LoadStoreOptimizationPass());
   }
   // Emit KCFI checks for indirect calls.
-  addPass(createAArch64KCFIPass());
+  addPass(createKCFIPass());
 
   // The AArch64SpeculationHardeningPass destroys dominator tree and natural
   // loop info, which is needed for the FalkorHWPFFixPass and also later on.
@@ -802,11 +810,6 @@ void AArch64PassConfig::addPreEmitPass() {
   if (EnableBranchTargets)
     addPass(createAArch64BranchTargetsPass());
 
-  // Relax conditional branch instructions if they're otherwise out of
-  // range of their destination.
-  if (BranchRelaxation)
-    addPass(&BranchRelaxationPassID);
-
   if (TM->getTargetTriple().isOSWindows()) {
     // Identify valid longjmp targets for Windows Control Flow Guard.
     addPass(createCFGuardLongjmpPass());
@@ -814,18 +817,32 @@ void AArch64PassConfig::addPreEmitPass() {
     addPass(createEHContGuardCatchretPass());
   }
 
-  if (TM->getOptLevel() != CodeGenOpt::None && EnableCompressJumpTables)
-    addPass(createAArch64CompressJumpTablesPass());
-
   if (TM->getOptLevel() != CodeGenOpt::None && EnableCollectLOH &&
       TM->getTargetTriple().isOSBinFormatMachO())
     addPass(createAArch64CollectLOHPass());
+}
+
+void AArch64PassConfig::addPostBBSections() {
+  // Relax conditional branch instructions if they're otherwise out of
+  // range of their destination.
+  if (BranchRelaxation)
+    addPass(&BranchRelaxationPassID);
+
+  if (TM->getOptLevel() != CodeGenOpt::None && EnableCompressJumpTables)
+    addPass(createAArch64CompressJumpTablesPass());
 }
 
 void AArch64PassConfig::addPreEmitPass2() {
   // SVE bundles move prefixes with destructive operations. BLR_RVMARKER pseudo
   // instructions are lowered to bundles as well.
   addPass(createUnpackMachineBundles(nullptr));
+}
+
+MachineFunctionInfo *AArch64TargetMachine::createMachineFunctionInfo(
+    BumpPtrAllocator &Allocator, const Function &F,
+    const TargetSubtargetInfo *STI) const {
+  return AArch64FunctionInfo::create<AArch64FunctionInfo>(
+      Allocator, F, static_cast<const AArch64Subtarget *>(STI));
 }
 
 yaml::MachineFunctionInfo *

@@ -1,40 +1,60 @@
-// RUN: mlir-opt %s --sparse-compiler=enable-runtime-library=true | \
-// RUN: mlir-cpu-runner \
-// RUN:  -e entry -entry-point-result=void  \
-// RUN:  -shared-libs=%mlir_lib_dir/libmlir_c_runner_utils%shlibext | \
-// RUN: FileCheck %s
+//--------------------------------------------------------------------------------------------------
+// WHEN CREATING A NEW TEST, PLEASE JUST COPY & PASTE WITHOUT EDITS.
+//
+// Set-up that's shared across all tests in this directory. In principle, this
+// config could be moved to lit.local.cfg. However, there are downstream users that
+//  do not use these LIT config files. Hence why this is kept inline.
+//
+// DEFINE: %{sparse_compiler_opts} = enable-runtime-library=true
+// DEFINE: %{sparse_compiler_opts_sve} = enable-arm-sve=true %{sparse_compiler_opts}
+// DEFINE: %{compile} = mlir-opt %s --sparse-compiler="%{sparse_compiler_opts}"
+// DEFINE: %{compile_sve} = mlir-opt %s --sparse-compiler="%{sparse_compiler_opts_sve}"
+// DEFINE: %{run_libs} = -shared-libs=%mlir_c_runner_utils,%mlir_runner_utils
+// DEFINE: %{run_opts} = -e entry -entry-point-result=void
+// DEFINE: %{run} = mlir-cpu-runner %{run_opts} %{run_libs}
+// DEFINE: %{run_sve} = %mcr_aarch64_cmd --march=aarch64 --mattr="+sve" %{run_opts} %{run_libs}
+//
+// DEFINE: %{env} =
+//--------------------------------------------------------------------------------------------------
 
-// RUN: mlir-opt %s --sparse-compiler=enable-runtime-library=false | \
-// RUN: mlir-cpu-runner \
-// RUN:  -e entry -entry-point-result=void  \
-// RUN:  -shared-libs=%mlir_lib_dir/libmlir_c_runner_utils%shlibext | \
-// RUN: FileCheck %s
+// RUN: %{compile} | %{run} | FileCheck %s
+//
+// Do the same run, but now with direct IR generation.
+// REDEFINE: %{sparse_compiler_opts} = enable-runtime-library=false
+// RUN: %{compile} | %{run} | FileCheck %s
+//
+// Do the same run, but now with direct IR generation and vectorization.
+// REDEFINE: %{sparse_compiler_opts} = enable-runtime-library=false vl=2 reassociate-fp-reductions=true enable-index-optimizations=true
+// RUN: %{compile} | %{run} | FileCheck %s
+//
+// Do the same run, but now with direct IR generation and VLA vectorization.
+// RUN: %if mlir_arm_sve_tests %{ %{compile_sve} | %{run_sve} | FileCheck %s %}
 
 #Row = #sparse_tensor.encoding<{
-  dimLevelType = [ "compressed", "dense" ]
+  lvlTypes = [ "compressed", "dense" ]
 }>
 
 #CSR = #sparse_tensor.encoding<{
-  dimLevelType = [ "dense", "compressed" ]
+  lvlTypes = [ "dense", "compressed" ]
 }>
 
 #DCSC = #sparse_tensor.encoding<{
-  dimLevelType = [ "compressed", "compressed" ],
-  dimOrdering = affine_map<(i,j) -> (j,i)>
+  lvlTypes = [ "compressed", "compressed" ],
+  dimToLvl = affine_map<(i,j) -> (j,i)>
 }>
 
 #SortedCOO = #sparse_tensor.encoding<{
-  dimLevelType = [ "compressed-nu", "singleton" ]
+  lvlTypes = [ "compressed_nu", "singleton" ]
 }>
 
 #SortedCOOPerm = #sparse_tensor.encoding<{
-  dimLevelType = [ "compressed-nu", "singleton" ],
-  dimOrdering = affine_map<(i,j) -> (j,i)>
+  lvlTypes = [ "compressed_nu", "singleton" ],
+  dimToLvl = affine_map<(i,j) -> (j,i)>
 }>
 
 #CCCPerm = #sparse_tensor.encoding<{
-  dimLevelType = [ "compressed", "compressed", "compressed"],
-  dimOrdering = affine_map<(d0, d1, d2) -> (d1, d2, d0)>
+  lvlTypes = [ "compressed", "compressed", "compressed"],
+  dimToLvl = affine_map<(d0, d1, d2) -> (d1, d2, d0)>
 }>
 
 module {
@@ -123,7 +143,7 @@ module {
    }
    return
   }
-  
+
   //
   // Main driver.
   //
@@ -135,11 +155,11 @@ module {
        [[  1.0,  2.0],
         [  5.0,  6.0]]
     > : tensor<2x2xf64>
-    
+
     %src3d = arith.constant sparse<
-       [[1, 2, 3], [4, 5, 6]], [1.0, 2.0] 
+       [[1, 2, 3], [4, 5, 6]], [1.0, 2.0]
     > : tensor<7x8x9xf64>
-    
+
     //
     // Convert dense tensor directly to various sparse tensors.
     //
@@ -167,7 +187,7 @@ module {
     // CHECK-NEXT: 5
     // CHECK-NEXT: 1
     // CHECK-NEXT: 1
-    // CHECK-NEXT: 6    
+    // CHECK-NEXT: 6
     call @foreach_print_dense(%src) : (tensor<2x2xf64>) -> ()
     // CHECK-NEXT: 0
     // CHECK-NEXT: 0
@@ -244,12 +264,13 @@ module {
     // CHECK-NEXT: 6
     // CHECK-NEXT: 2
     call @foreach_print_3d(%s6): (tensor<7x8x9xf64, #CCCPerm>) -> ()
-    
+
     bufferization.dealloc_tensor %s1 : tensor<2x2xf64, #Row>
     bufferization.dealloc_tensor %s2 : tensor<2x2xf64, #CSR>
     bufferization.dealloc_tensor %s3 : tensor<2x2xf64, #DCSC>
     bufferization.dealloc_tensor %s4 : tensor<2x2xf64, #SortedCOO>
     bufferization.dealloc_tensor %s5 : tensor<2x2xf64, #SortedCOOPerm>
+    bufferization.dealloc_tensor %s6 : tensor<7x8x9xf64, #CCCPerm>
 
     return
   }

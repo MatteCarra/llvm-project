@@ -550,6 +550,20 @@ TEST_F(PatternMatchTest, Power2) {
   EXPECT_TRUE(m_NegatedPower2().match(CNegIntMin));
 }
 
+TEST_F(PatternMatchTest, Not) {
+  Value *C1 = IRB.getInt32(1);
+  Value *C2 = IRB.getInt32(2);
+  Value *C3 = IRB.getInt32(3);
+  Instruction *Not = BinaryOperator::CreateXor(C1, C2);
+
+  // When `m_Not` does not match the `not` itself,
+  // it should not try to apply the inner matcher.
+  Value *Val = C3;
+  EXPECT_FALSE(m_Not(m_Value(Val)).match(Not));
+  EXPECT_EQ(Val, C3);
+  Not->deleteValue();
+}
+
 TEST_F(PatternMatchTest, CommutativeDeferredValue) {
   Value *X = IRB.getInt32(1);
   Value *Y = IRB.getInt32(2);
@@ -1742,21 +1756,19 @@ TEST_F(PatternMatchTest, VScale) {
   DataLayout DL = M->getDataLayout();
 
   Type *VecTy = ScalableVectorType::get(IRB.getInt8Ty(), 1);
-  Type *VecPtrTy = VecTy->getPointerTo();
-  Value *NullPtrVec = Constant::getNullValue(VecPtrTy);
+  Value *NullPtrVec =
+      Constant::getNullValue(PointerType::getUnqual(VecTy->getContext()));
   Value *GEP = IRB.CreateGEP(VecTy, NullPtrVec, IRB.getInt64(1));
   Value *PtrToInt = IRB.CreatePtrToInt(GEP, DL.getIntPtrType(GEP->getType()));
-  EXPECT_TRUE(match(PtrToInt, m_VScale(DL)));
+  EXPECT_TRUE(match(PtrToInt, m_VScale()));
 
-  // This used to cause assertion failures when attempting to match m_VScale.
-  // With opaque pointers the bitcast is no longer present.
   Type *VecTy2 = ScalableVectorType::get(IRB.getInt8Ty(), 2);
-  Value *NullPtrVec2 = Constant::getNullValue(VecTy2->getPointerTo());
-  Value *BitCast = IRB.CreateBitCast(NullPtrVec2, VecPtrTy);
-  Value *GEP2 = IRB.CreateGEP(VecTy, BitCast, IRB.getInt64(1));
+  Value *NullPtrVec2 =
+      Constant::getNullValue(PointerType::getUnqual(VecTy2->getContext()));
+  Value *GEP2 = IRB.CreateGEP(VecTy, NullPtrVec2, IRB.getInt64(1));
   Value *PtrToInt2 =
       IRB.CreatePtrToInt(GEP2, DL.getIntPtrType(GEP2->getType()));
-  EXPECT_TRUE(match(PtrToInt2, m_VScale(DL)));
+  EXPECT_TRUE(match(PtrToInt2, m_VScale()));
 }
 
 TEST_F(PatternMatchTest, NotForbidUndef) {

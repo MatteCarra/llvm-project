@@ -45,6 +45,10 @@ struct derived : public base {
   static bool classof(const base *B) { return true; }
 };
 
+struct derived_nocast : public base {
+  static bool classof(const base *B) { return false; }
+};
+
 template <> struct isa_impl<foo, bar> {
   static inline bool doit(const bar &Val) {
     dbgs() << "Classof: " << &Val << "\n";
@@ -212,6 +216,18 @@ TEST(CastingTest, dyn_cast) {
   // EXPECT_EQ(F4, null_foo);
   foo *F5 = B1.daz();
   EXPECT_NE(F5, null_foo);
+
+  auto BP = std::make_unique<const bar>();
+  auto FP = dyn_cast<foo>(BP);
+  static_assert(std::is_same_v<std::unique_ptr<const foo>, decltype(FP)>,
+                "Incorrect deduced return type!");
+  EXPECT_NE(FP.get(), nullptr);
+  EXPECT_EQ(BP.get(), nullptr);
+
+  auto BP2 = std::make_unique<base>();
+  auto DP = dyn_cast<derived_nocast>(BP2);
+  EXPECT_EQ(DP.get(), nullptr);
+  EXPECT_NE(BP2.get(), nullptr);
 }
 
 // All these tests forward to dyn_cast_if_present, so they also provde an
@@ -235,7 +251,7 @@ TEST(CastingTest, dyn_cast_or_null) {
 
 TEST(CastingTest, dyn_cast_value_types) {
   T1 t1;
-  Optional<T2> t2 = dyn_cast<T2>(t1);
+  std::optional<T2> t2 = dyn_cast<T2>(t1);
   EXPECT_TRUE(t2);
 
   T2 *t2ptr = dyn_cast<T2>(&t1);
@@ -246,12 +262,12 @@ TEST(CastingTest, dyn_cast_value_types) {
 }
 
 TEST(CastingTest, dyn_cast_if_present) {
-  Optional<T1> empty{};
-  Optional<T2> F1 = dyn_cast_if_present<T2>(empty);
+  std::optional<T1> empty{};
+  std::optional<T2> F1 = dyn_cast_if_present<T2>(empty);
   EXPECT_FALSE(F1.has_value());
 
   T1 t1;
-  Optional<T2> F2 = dyn_cast_if_present<T2>(t1);
+  std::optional<T2> F2 = dyn_cast_if_present<T2>(t1);
   EXPECT_TRUE(F2.has_value());
 
   T1 *t1Null = nullptr;

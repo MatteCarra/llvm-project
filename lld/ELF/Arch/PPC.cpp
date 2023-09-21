@@ -471,10 +471,14 @@ void PPC::relaxTlsIeToLe(uint8_t *loc, const Relocation &rel,
     if (insn >> 26 != 31)
       error("unrecognized instruction for IE to LE R_PPC_TLS");
     // addi rT, rT, x@tls --> addi rT, rT, x@tprel@l
-    uint32_t dFormOp = getPPCDFormOp((read32(loc) & 0x000007fe) >> 1);
-    if (dFormOp == 0)
-      error("unrecognized instruction for IE to LE R_PPC_TLS");
-    write32(loc, (dFormOp << 26) | (insn & 0x03ff0000) | lo(val));
+    unsigned secondaryOp = (read32(loc) & 0x000007fe) >> 1;
+    uint32_t dFormOp = getPPCDFormOp(secondaryOp);
+    if (dFormOp == 0) { // Expecting a DS-Form instruction.
+      dFormOp = getPPCDSFormOp(secondaryOp);
+      if (dFormOp == 0)
+        error("unrecognized instruction for IE to LE R_PPC_TLS");
+    }
+    write32(loc, (dFormOp | (insn & 0x03ff0000) | lo(val)));
     break;
   }
   default:
@@ -486,7 +490,7 @@ void PPC::relocateAlloc(InputSectionBase &sec, uint8_t *buf) const {
   uint64_t secAddr = sec.getOutputSection()->addr;
   if (auto *s = dyn_cast<InputSection>(&sec))
     secAddr += s->outSecOff;
-  for (const Relocation &rel : sec.relocations) {
+  for (const Relocation &rel : sec.relocs()) {
     uint8_t *loc = buf + rel.offset;
     const uint64_t val = SignExtend64(
         sec.getRelocTargetVA(sec.file, rel.type, rel.addend,

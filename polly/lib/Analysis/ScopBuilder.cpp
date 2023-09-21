@@ -1649,7 +1649,7 @@ bool ScopBuilder::buildAccessCallInst(MemAccInst Inst, ScopStmt *Stmt) {
     return true;
 
   if (ME.onlyAccessesArgPointees()) {
-    ModRefInfo ArgMR = ME.getModRef(MemoryEffects::ArgMem);
+    ModRefInfo ArgMR = ME.getModRef(IRMemLocation::ArgMem);
     auto AccType =
         !isModSet(ArgMR) ? MemoryAccess::READ : MemoryAccess::MAY_WRITE;
     Loop *L = LI.getLoopFor(Inst->getParent());
@@ -3205,7 +3205,8 @@ bool ScopBuilder::buildAliasChecks() {
 
 std::tuple<ScopBuilder::AliasGroupVectorTy, DenseSet<const ScopArrayInfo *>>
 ScopBuilder::buildAliasGroupsForAccesses() {
-  AliasSetTracker AST(AA);
+  BatchAAResults BAA(AA);
+  AliasSetTracker AST(BAA);
 
   DenseMap<Value *, MemoryAccess *> PtrToAcc;
   DenseSet<const ScopArrayInfo *> HasWriteAccess;

@@ -1,16 +1,36 @@
-// RUN: mlir-opt %s --sparse-compiler=enable-runtime-library=true | \
-// RUN: mlir-cpu-runner \
-// RUN:  -e entry -entry-point-result=void  \
-// RUN:  -shared-libs=%mlir_lib_dir/libmlir_c_runner_utils%shlibext | \
-// RUN: FileCheck %s
+//--------------------------------------------------------------------------------------------------
+// WHEN CREATING A NEW TEST, PLEASE JUST COPY & PASTE WITHOUT EDITS.
+//
+// Set-up that's shared across all tests in this directory. In principle, this
+// config could be moved to lit.local.cfg. However, there are downstream users that
+//  do not use these LIT config files. Hence why this is kept inline.
+//
+// DEFINE: %{sparse_compiler_opts} = enable-runtime-library=true
+// DEFINE: %{sparse_compiler_opts_sve} = enable-arm-sve=true %{sparse_compiler_opts}
+// DEFINE: %{compile} = mlir-opt %s --sparse-compiler="%{sparse_compiler_opts}"
+// DEFINE: %{compile_sve} = mlir-opt %s --sparse-compiler="%{sparse_compiler_opts_sve}"
+// DEFINE: %{run_libs} = -shared-libs=%mlir_c_runner_utils,%mlir_runner_utils
+// DEFINE: %{run_opts} = -e entry -entry-point-result=void
+// DEFINE: %{run} = mlir-cpu-runner %{run_opts} %{run_libs}
+// DEFINE: %{run_sve} = %mcr_aarch64_cmd --march=aarch64 --mattr="+sve" %{run_opts} %{run_libs}
+//
+// DEFINE: %{env} =
+//--------------------------------------------------------------------------------------------------
 
-// RUN: mlir-opt %s --sparse-compiler=enable-runtime-library=false | \
-// RUN: mlir-cpu-runner \
-// RUN:  -e entry -entry-point-result=void  \
-// RUN:  -shared-libs=%mlir_lib_dir/libmlir_c_runner_utils%shlibext | \
-// RUN: FileCheck %s
+// RUN: %{compile} | %{run} | FileCheck %s
+//
+// Do the same run, but now with direct IR generation.
+// REDEFINE: %{sparse_compiler_opts} = enable-runtime-library=false
+// RUN: %{compile} | %{run} | FileCheck %s
+//
+// Do the same run, but now with direct IR generation and vectorization.
+// REDEFINE: %{sparse_compiler_opts} = enable-runtime-library=false vl=2 reassociate-fp-reductions=true enable-index-optimizations=true
+// RUN: %{compile} | %{run} | FileCheck %s
+//
+// Do the same run, but now with direct IR generation and VLA vectorization.
+// RUN: %if mlir_arm_sve_tests %{ %{compile_sve} | %{run_sve} | FileCheck %s %}
 
-#DCSR = #sparse_tensor.encoding<{dimLevelType = ["compressed", "compressed"]}>
+#DCSR = #sparse_tensor.encoding<{lvlTypes = ["compressed", "compressed"]}>
 
 //
 // Traits for 2-d tensor (aka matrix) operations.
@@ -41,6 +61,8 @@
 }
 
 module {
+  func.func private @printMemrefF64(%ptr : tensor<*xf64>)
+
   // Scales a sparse matrix into a new sparse matrix.
   func.func @matrix_scale(%arga: tensor<?x?xf64, #DCSR>) -> tensor<?x?xf64, #DCSR> {
     %s = arith.constant 2.0 : f64
@@ -109,11 +131,9 @@ module {
 
   // Dump a sparse matrix.
   func.func @dump(%arg0: tensor<?x?xf64, #DCSR>) {
-    %d0 = arith.constant 0.0 : f64
-    %c0 = arith.constant 0 : index
     %dm = sparse_tensor.convert %arg0 : tensor<?x?xf64, #DCSR> to tensor<?x?xf64>
-    %1 = vector.transfer_read %dm[%c0, %c0], %d0: tensor<?x?xf64>, vector<4x8xf64>
-    vector.print %1 : vector<4x8xf64>
+    %u = tensor.cast %dm : tensor<?x?xf64> to tensor<*xf64>
+    call @printMemrefF64(%u) : (tensor<*xf64>) -> ()
     return
   }
 
@@ -149,12 +169,30 @@ module {
     //
     // Verify the results.
     //
-    // CHECK:      ( ( 1, 2, 0, 0, 0, 0, 0, 0 ), ( 0, 0, 0, 0, 0, 0, 0, 3 ), ( 0, 0, 4, 0, 5, 0, 0, 6 ), ( 7, 0, 8, 9, 0, 0, 0, 0 ) )
-    // CHECK-NEXT: ( ( 6, 0, 0, 0, 0, 0, 0, 5 ), ( 4, 0, 0, 0, 0, 0, 3, 0 ), ( 0, 2, 0, 0, 0, 0, 0, 1 ), ( 0, 0, 0, 0, 0, 0, 0, 0 ) )
-    // CHECK-NEXT: ( ( 2, 4, 0, 0, 0, 0, 0, 0 ), ( 0, 0, 0, 0, 0, 0, 0, 6 ), ( 0, 0, 8, 0, 10, 0, 0, 12 ), ( 14, 0, 16, 18, 0, 0, 0, 0 ) )
-    // CHECK-NEXT: ( ( 2, 4, 0, 0, 0, 0, 0, 0 ), ( 0, 0, 0, 0, 0, 0, 0, 6 ), ( 0, 0, 8, 0, 10, 0, 0, 12 ), ( 14, 0, 16, 18, 0, 0, 0, 0 ) )
-    // CHECK-NEXT: ( ( 8, 4, 0, 0, 0, 0, 0, 5 ), ( 4, 0, 0, 0, 0, 0, 3, 6 ), ( 0, 2, 8, 0, 10, 0, 0, 13 ), ( 14, 0, 16, 18, 0, 0, 0, 0 ) )
-    // CHECK-NEXT: ( ( 12, 0, 0, 0, 0, 0, 0, 0 ), ( 0, 0, 0, 0, 0, 0, 0, 0 ), ( 0, 0, 0, 0, 0, 0, 0, 12 ), ( 0, 0, 0, 0, 0, 0, 0, 0 ) )
+    // CHECK:      {{\[}}[1,   2,   0,   0,   0,   0,   0,   0],
+    // CHECK-NEXT: [0,   0,   0,   0,   0,   0,   0,   3],
+    // CHECK-NEXT: [0,   0,   4,   0,   5,   0,   0,   6],
+    // CHECK-NEXT: [7,   0,   8,   9,   0,   0,   0,   0]]
+    // CHECK:      {{\[}}[6,   0,   0,   0,   0,   0,   0,   5],
+    // CHECK-NEXT: [4,   0,   0,   0,   0,   0,   3,   0],
+    // CHECK-NEXT: [0,   2,   0,   0,   0,   0,   0,   1],
+    // CHECK-NEXT: [0,   0,   0,   0,   0,   0,   0,   0]]
+    // CHECK:      {{\[}}[2,   4,   0,   0,   0,   0,   0,   0],
+    // CHECK-NEXT: [0,   0,   0,   0,   0,   0,   0,   6],
+    // CHECK-NEXT: [0,   0,   8,   0,   10,   0,   0,   12],
+    // CHECK-NEXT: [14,   0,   16,   18,   0,   0,   0,   0]]
+    // CHECK:      {{\[}}[2,   4,   0,   0,   0,   0,   0,   0],
+    // CHECK-NEXT: [0,   0,   0,   0,   0,   0,   0,   6],
+    // CHECK-NEXT: [0,   0,   8,   0,   10,   0,   0,   12],
+    // CHECK-NEXT: [14,   0,   16,   18,   0,   0,   0,   0]]
+    // CHECK:      {{\[}}[8,   4,   0,   0,   0,   0,   0,   5],
+    // CHECK-NEXT: [4,   0,   0,   0,   0,   0,   3,   6],
+    // CHECK-NEXT: [0,   2,   8,   0,   10,   0,   0,   13],
+    // CHECK-NEXT: [14,   0,   16,   18,   0,   0,   0,   0]]
+    // CHECK:      {{\[}}[12,   0,   0,   0,   0,   0,   0,   0],
+    // CHECK-NEXT: [0,   0,   0,   0,   0,   0,   0,   0],
+    // CHECK-NEXT: [0,   0,   0,   0,   0,   0,   0,   12],
+    // CHECK-NEXT: [0,   0,   0,   0,   0,   0,   0,   0]]
     //
     call @dump(%sm1) : (tensor<?x?xf64, #DCSR>) -> ()
     call @dump(%sm2) : (tensor<?x?xf64, #DCSR>) -> ()

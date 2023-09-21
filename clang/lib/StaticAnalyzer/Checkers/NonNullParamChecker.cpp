@@ -136,10 +136,10 @@ void NonNullParamChecker::checkPreCall(const CallEvent &Call,
     if (!DV)
       continue;
 
-    assert(!HasRefTypeParam || isa<Loc>(DV.value()));
+    assert(!HasRefTypeParam || isa<Loc>(*DV));
 
     // Process the case when the argument is not a location.
-    if (ExpectedToBeNonNull && !isa<Loc>(DV.value())) {
+    if (ExpectedToBeNonNull && !isa<Loc>(*DV)) {
       // If the argument is a union type, we want to handle a potential
       // transparent_union GCC extension.
       if (!ArgE)
@@ -303,7 +303,7 @@ std::unique_ptr<PathSensitiveBugReport>
 NonNullParamChecker::genReportReferenceToNullPointer(
     const ExplodedNode *ErrorNode, const Expr *ArgE) const {
   if (!BTNullRefArg)
-    BTNullRefArg.reset(new BuiltinBug(this, "Dereference of null pointer"));
+    BTNullRefArg.reset(new BugType(this, "Dereference of null pointer"));
 
   auto R = std::make_unique<PathSensitiveBugReport>(
       *BTNullRefArg, "Forming reference to null pointer", ErrorNode);

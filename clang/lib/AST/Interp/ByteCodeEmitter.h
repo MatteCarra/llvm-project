@@ -69,7 +69,10 @@ protected:
   Local createLocal(Descriptor *D);
 
   /// Parameter indices.
-  llvm::DenseMap<const ParmVarDecl *, unsigned> Params;
+  llvm::DenseMap<const ParmVarDecl *, ParamOffset> Params;
+  /// Lambda captures.
+  llvm::DenseMap<const ValueDecl *, ParamOffset> LambdaCaptures;
+  unsigned LambdaThisCapture;
   /// Local descriptors.
   llvm::SmallVector<SmallVector<Local, 8>, 2> Descriptors;
 
@@ -83,13 +86,13 @@ private:
   /// Offset of the next local variable.
   unsigned NextLocalOffset = 0;
   /// Location of a failure.
-  llvm::Optional<SourceLocation> BailLocation;
+  std::optional<SourceLocation> BailLocation;
   /// Label information for linker.
   llvm::DenseMap<LabelTy, unsigned> LabelOffsets;
   /// Location of label relocations.
   llvm::DenseMap<LabelTy, llvm::SmallVector<unsigned, 5>> LabelRelocs;
   /// Program code.
-  std::vector<char> Code;
+  std::vector<std::byte> Code;
   /// Opcode to expression mapping.
   SourceMap SrcMap;
 

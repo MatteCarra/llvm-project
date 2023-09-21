@@ -1,5 +1,4 @@
-// RUN: %clang_cc1 -no-opaque-pointers -emit-llvm -triple x86_64-apple-darwin %s -o - | FileCheck %s
-// rdar://16462586
+// RUN: %clang_cc1 -emit-llvm -triple x86_64-apple-darwin %s -o - | FileCheck %s
 
 __attribute__((objc_runtime_name("MySecretNamespace.Protocol")))
 @protocol Protocol
@@ -44,7 +43,6 @@ __attribute__((objc_runtime_name("MySecretNamespace.Message")))
 + (void) ClsMethodP2 {}
 @end
 
-// rdar://16877359
 __attribute__((objc_runtime_name("foo")))
 @interface SLREarth
 - (instancetype)init;
@@ -64,5 +62,5 @@ id Test16877359(void) {
 // CHECK: private unnamed_addr constant [50 x i8] c"T@\22<MySecretNamespace.Protocol3>\22,&,V_idProtoProp\00"
 
 // CHECK: @"OBJC_CLASS_$_foo" = external global %struct._class_t
-// CHECK: define internal i8* @"\01-[Message MyMethod]"
-// CHECK: [[IVAR:%.*]] = load i64, i64* @"OBJC_IVAR_$_MySecretNamespace.Message.MyIVAR"
+// CHECK: define internal ptr @"\01-[Message MyMethod]"
+// CHECK: [[IVAR:%.*]] = load i64, ptr @"OBJC_IVAR_$_MySecretNamespace.Message.MyIVAR"

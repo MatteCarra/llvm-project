@@ -19,14 +19,14 @@ let TargetPrefix = "hexagon" in {
                               list<LLVMType> param_types,
                               list<IntrinsicProperty> properties>
     : ClangBuiltin<!strconcat("__builtin_", GCCIntSuffix)>,
-      Intrinsic<ret_types, param_types, properties>;
+      DefaultAttrsIntrinsic<ret_types, param_types, properties>;
 
   /// Hexagon_NonGCC_Intrinsic - Base class for bitcode convertible Hexagon
   /// intrinsics.
   class Hexagon_NonGCC_Intrinsic<list<LLVMType> ret_types,
                                  list<LLVMType> param_types,
                                  list<IntrinsicProperty> properties>
-    : Intrinsic<ret_types, param_types, properties>;
+    : DefaultAttrsIntrinsic<ret_types, param_types, properties>;
 }
 
 class Hexagon_mem_memmemsi_Intrinsic<string GCCIntSuffix>
@@ -125,23 +125,28 @@ Hexagon_mem_memsisisi_Intrinsic<"circ_stb">;
 def int_hexagon_prefetch :
 Hexagon_Intrinsic<"HEXAGON_prefetch", [], [llvm_ptr_ty], []>;
 
-def llvm_ptr32_ty : LLVMPointerType<llvm_i32_ty>;
-def llvm_ptr64_ty : LLVMPointerType<llvm_i64_ty>;
-
 // Mark locked loads as read/write to prevent any accidental reordering.
-def int_hexagon_L2_loadw_locked :
-Hexagon_Intrinsic<"HEXAGON_L2_loadw_locked", [llvm_i32_ty], [llvm_ptr32_ty],
-      [IntrArgMemOnly, NoCapture<ArgIndex<0>>]>;
-def int_hexagon_L4_loadd_locked :
-Hexagon_Intrinsic<"HEXAGON_L4_loadd_locked", [llvm_i64_ty], [llvm_ptr64_ty],
-      [IntrArgMemOnly, NoCapture<ArgIndex<0>>]>;
+// These don't use Hexagon_Intrinsic, because they are not nosync, and as such
+// cannot use default attributes.
+let TargetPrefix = "hexagon" in {
+  def int_hexagon_L2_loadw_locked :
+  ClangBuiltin<"__builtin_HEXAGON_L2_loadw_locked">,
+  Intrinsic<[llvm_i32_ty], [llvm_ptr_ty],
+        [IntrArgMemOnly, NoCapture<ArgIndex<0>>]>;
+  def int_hexagon_L4_loadd_locked :
+  ClangBuiltin<"__builtin__HEXAGON_L4_loadd_locked">,
+  Intrinsic<[llvm_i64_ty], [llvm_ptr_ty],
+        [IntrArgMemOnly, NoCapture<ArgIndex<0>>]>;
 
-def int_hexagon_S2_storew_locked :
-Hexagon_Intrinsic<"HEXAGON_S2_storew_locked", [llvm_i32_ty],
-      [llvm_ptr32_ty, llvm_i32_ty], [IntrArgMemOnly, NoCapture<ArgIndex<0>>]>;
-def int_hexagon_S4_stored_locked :
-Hexagon_Intrinsic<"HEXAGON_S4_stored_locked", [llvm_i32_ty],
-      [llvm_ptr64_ty, llvm_i64_ty], [IntrArgMemOnly, NoCapture<ArgIndex<0>>]>;
+  def int_hexagon_S2_storew_locked :
+  ClangBuiltin<"__builtin_HEXAGON_S2_storew_locked">,
+  Intrinsic<[llvm_i32_ty],
+        [llvm_ptr_ty, llvm_i32_ty], [IntrArgMemOnly, NoCapture<ArgIndex<0>>]>;
+  def int_hexagon_S4_stored_locked :
+  ClangBuiltin<"__builtin_HEXAGON_S4_stored_locked">,
+  Intrinsic<[llvm_i32_ty],
+        [llvm_ptr_ty, llvm_i64_ty], [IntrArgMemOnly, NoCapture<ArgIndex<0>>]>;
+}
 
 def int_hexagon_vmemcpy : Hexagon_Intrinsic<"hexagon_vmemcpy",
     [], [llvm_ptr_ty, llvm_ptr_ty, llvm_i32_ty],
@@ -258,7 +263,7 @@ Hexagon_v64i32_v64i32v32i32i64_rtt_Intrinsic<"HEXAGON_V6_vrmpyub_rtt_acc_128B">;
 class Hexagon_pred_vload_imm<LLVMType ValTy>
   : Hexagon_NonGCC_Intrinsic<
       [ValTy],
-      [llvm_i1_ty, LLVMPointerType<ValTy>, llvm_i32_ty],
+      [llvm_i1_ty, llvm_ptr_ty, llvm_i32_ty],
       [IntrReadMem, IntrArgMemOnly, NoCapture<ArgIndex<1>>,
        ImmArg<ArgIndex<2>>]>;
 
@@ -276,8 +281,8 @@ def int_hexagon_V6_vL32b_nt_npred_ai_128B:  Hexagon_pred_vload_imm_128B;
 
 class Hexagom_pred_vload_upd<LLVMType ValTy, bit TakesImm>
   : Hexagon_NonGCC_Intrinsic<
-      [ValTy, LLVMPointerType<ValTy>],
-      [llvm_i1_ty, LLVMPointerType<ValTy>, llvm_i32_ty],
+      [ValTy, llvm_ptr_ty],
+      [llvm_i1_ty, llvm_ptr_ty, llvm_i32_ty],
       !if(TakesImm,
           [IntrReadMem, IntrArgMemOnly, NoCapture<ArgIndex<1>>,
            ImmArg<ArgIndex<2>>],
@@ -310,7 +315,7 @@ def int_hexagon_V6_vL32b_nt_npred_ppu_128B: Hexagom_pred_vload_upd_128B<0>;
 class Hexagon_pred_vstore_imm<LLVMType ValTy>
   : Hexagon_NonGCC_Intrinsic<
       [],
-      [llvm_i1_ty, LLVMPointerType<ValTy>, llvm_i32_ty, ValTy],
+      [llvm_i1_ty, llvm_ptr_ty, llvm_i32_ty, ValTy],
       [IntrWriteMem, IntrArgMemOnly, NoCapture<ArgIndex<1>>,
        ImmArg<ArgIndex<2>>]>;
 
@@ -332,8 +337,8 @@ def int_hexagon_V6_vS32b_nt_npred_ai_128B:  Hexagon_pred_vstore_imm_128B;
 
 class Hexagon_pred_vstore_upd<LLVMType ValTy, bit TakesImm>
   : Hexagon_NonGCC_Intrinsic<
-      [LLVMPointerType<ValTy>],
-      [llvm_i1_ty, LLVMPointerType<ValTy>, llvm_i32_ty, ValTy],
+      [llvm_ptr_ty],
+      [llvm_i1_ty, llvm_ptr_ty, llvm_i32_ty, ValTy],
       !if(TakesImm,
           [IntrWriteMem, IntrArgMemOnly, NoCapture<ArgIndex<1>>,
            ImmArg<ArgIndex<2>>],

@@ -41,7 +41,7 @@ namespace serialization {
 /// Version 4 of AST files also requires that the version control branch and
 /// revision match exactly, since there is no backward compatibility of
 /// AST files at this time.
-const unsigned VERSION_MAJOR = 24;
+const unsigned VERSION_MAJOR = 29;
 
 /// AST file minor version number supported by this version of
 /// Clang.
@@ -397,6 +397,9 @@ enum UnhashedControlBlockRecordTypes {
   /// Record code for the diagnostic options table.
   DIAGNOSTIC_OPTIONS,
 
+  /// Record code for the headers search paths.
+  HEADER_SEARCH_PATHS,
+
   /// Record code for \#pragma diagnostic mappings.
   DIAG_PRAGMA_MAPPINGS,
 
@@ -693,8 +696,7 @@ enum ASTRecordTypes {
   /// Record code for \#pragma float_control options.
   FLOAT_CONTROL_PRAGMA_OPTIONS = 65,
 
-  /// Record code for included files.
-  PP_INCLUDED_FILES = 66,
+  /// ID 66 used to be the list of included files.
 
   /// Record code for an unterminated \#pragma clang assume_nonnull begin
   /// recorded in a preamble.
@@ -1093,6 +1095,11 @@ enum PredefinedTypeIDs {
 // \brief RISC-V V types with auto numeration
 #define RVV_TYPE(Name, Id, SingletonId) PREDEF_TYPE_##Id##_ID,
 #include "clang/Basic/RISCVVTypes.def"
+// \brief WebAssembly reference types with auto numeration
+#define WASM_TYPE(Name, Id, SingletonId) PREDEF_TYPE_##Id##_ID,
+#include "clang/Basic/WebAssemblyReferenceTypes.def"
+  // Sentinel value. Considered a predefined type but not useable as one.
+  PREDEF_TYPE_LAST_ID
 };
 
 /// The number of predefined type IDs that are reserved for
@@ -1100,7 +1107,13 @@ enum PredefinedTypeIDs {
 ///
 /// Type IDs for non-predefined types will start at
 /// NUM_PREDEF_TYPE_IDs.
-const unsigned NUM_PREDEF_TYPE_IDS = 300;
+const unsigned NUM_PREDEF_TYPE_IDS = 500;
+
+// Ensure we do not overrun the predefined types we reserved
+// in the enum PredefinedTypeIDs above.
+static_assert(PREDEF_TYPE_LAST_ID < NUM_PREDEF_TYPE_IDS,
+              "Too many enumerators in PredefinedTypeIDs. Review the value of "
+              "NUM_PREDEF_TYPE_IDS");
 
 /// Record codes for each kind of type.
 ///
@@ -1314,6 +1327,9 @@ enum DeclCode {
 
   /// A FileScopeAsmDecl record.
   DECL_FILE_SCOPE_ASM,
+
+  /// A TopLevelStmtDecl record.
+  DECL_TOP_LEVEL_STMT_DECL,
 
   /// A BlockDecl record.
   DECL_BLOCK,
@@ -1855,6 +1871,9 @@ enum StmtCode {
   /// A CXXBoolLiteralExpr record.
   EXPR_CXX_BOOL_LITERAL,
 
+  /// A CXXParenListInitExpr record.
+  EXPR_CXX_PAREN_LIST_INIT,
+
   EXPR_CXX_NULL_PTR_LITERAL, // CXXNullPtrLiteralExpr
   EXPR_CXX_TYPEID_EXPR,      // CXXTypeidExpr (of expr).
   EXPR_CXX_TYPEID_TYPE,      // CXXTypeidExpr (of type).
@@ -1976,6 +1995,7 @@ enum StmtCode {
   STMT_OMP_TARGET_TEAMS_DISTRIBUTE_PARALLEL_FOR_DIRECTIVE,
   STMT_OMP_TARGET_TEAMS_DISTRIBUTE_PARALLEL_FOR_SIMD_DIRECTIVE,
   STMT_OMP_TARGET_TEAMS_DISTRIBUTE_SIMD_DIRECTIVE,
+  STMT_OMP_SCOPE_DIRECTIVE,
   STMT_OMP_INTEROP_DIRECTIVE,
   STMT_OMP_DISPATCH_DIRECTIVE,
   STMT_OMP_MASKED_DIRECTIVE,

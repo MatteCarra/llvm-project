@@ -1,9 +1,14 @@
 add_mlir_dialect_library(MLIRTensorTransforms
   BufferizableOpInterfaceImpl.cpp
   Bufferize.cpp
+  EmptyOpPatterns.cpp
   ExtractSliceFromReshapeUtils.cpp
+  FoldIntoPackAndUnpackPatterns.cpp
+  FoldTensorSubsetOps.cpp
+  IndependenceTransforms.cpp
   MergeConsecutiveInsertExtractSlicePatterns.cpp
-  SplitPaddingPatterns.cpp
+  ReshapePatterns.cpp
+  RewriteAsConstant.cpp
   SwapExtractSliceWithProducerPatterns.cpp
 
   ADDITIONAL_HEADER_DIRS
@@ -14,6 +19,7 @@ add_mlir_dialect_library(MLIRTensorTransforms
 
   LINK_LIBS PUBLIC
   MLIRAffineDialect
+  MLIRAffineTransforms
   MLIRAffineUtils
   MLIRArithDialect
   MLIRBufferizationDialect
@@ -24,6 +30,9 @@ add_mlir_dialect_library(MLIRTensorTransforms
   MLIRPass
   MLIRSCFDialect
   MLIRTensorDialect
+  MLIRTensorUtils
   MLIRTilingInterface
   MLIRTransforms
-  )
+  MLIRVectorDialect
+  MLIRValueBoundsOpInterface
+)

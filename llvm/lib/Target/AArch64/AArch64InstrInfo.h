@@ -15,9 +15,9 @@
 
 #include "AArch64.h"
 #include "AArch64RegisterInfo.h"
-#include "llvm/ADT/Optional.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/Support/TypeSize.h"
+#include <optional>
 
 #define GET_INSTRINFO_HEADER
 #include "AArch64GenInstrInfo.inc"
@@ -85,7 +85,7 @@ public:
 
   /// Returns the unscaled load/store for the scaled load/store opcode,
   /// if there is a corresponding unscaled variant available.
-  static Optional<unsigned> getUnscaledLdSt(unsigned Opc);
+  static std::optional<unsigned> getUnscaledLdSt(unsigned Opc);
 
   /// Scaling factor for (scaled or unscaled) load or store.
   static int getMemScale(unsigned Opc);
@@ -108,11 +108,14 @@ public:
   /// Returns the base register operator of a load/store.
   static const MachineOperand &getLdStBaseOp(const MachineInstr &MI);
 
-  /// Returns the the immediate offset operator of a load/store.
+  /// Returns the immediate offset operator of a load/store.
   static const MachineOperand &getLdStOffsetOp(const MachineInstr &MI);
 
   /// Returns whether the instruction is FP or NEON.
   static bool isFpOrNEON(const MachineInstr &MI);
+
+  /// Returns whether the instruction is in H form (16 bit operands)
+  static bool isHForm(const MachineInstr &MI);
 
   /// Returns whether the instruction is in Q form (128 bit operands)
   static bool isQForm(const MachineInstr &MI);
@@ -133,7 +136,7 @@ public:
   /// Hint that pairing the given load or store is unprofitable.
   static void suppressLdStPair(MachineInstr &MI);
 
-  Optional<ExtAddrMode>
+  std::optional<ExtAddrMode>
   getAddrModeFromMemoryOp(const MachineInstr &MemI,
                           const TargetRegisterInfo *TRI) const override;
 
@@ -182,12 +185,14 @@ public:
                            MachineBasicBlock::iterator MBBI, Register SrcReg,
                            bool isKill, int FrameIndex,
                            const TargetRegisterClass *RC,
-                           const TargetRegisterInfo *TRI) const override;
+                           const TargetRegisterInfo *TRI,
+                           Register VReg) const override;
 
   void loadRegFromStackSlot(MachineBasicBlock &MBB,
                             MachineBasicBlock::iterator MBBI, Register DestReg,
                             int FrameIndex, const TargetRegisterClass *RC,
-                            const TargetRegisterInfo *TRI) const override;
+                            const TargetRegisterInfo *TRI,
+                            Register VReg) const override;
 
   // This tells target independent code that it is okay to pass instructions
   // with subreg operands to foldMemoryOperandImpl.
@@ -207,6 +212,11 @@ public:
                              int64_t BrOffset) const override;
 
   MachineBasicBlock *getBranchDestBlock(const MachineInstr &MI) const override;
+
+  void insertIndirectBranch(MachineBasicBlock &MBB,
+                            MachineBasicBlock &NewDestBB,
+                            MachineBasicBlock &RestoreBB, const DebugLoc &DL,
+                            int64_t BrOffset, RegScavenger *RS) const override;
 
   bool analyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
                      MachineBasicBlock *&FBB,
@@ -230,6 +240,10 @@ public:
                     const DebugLoc &DL, Register DstReg,
                     ArrayRef<MachineOperand> Cond, Register TrueReg,
                     Register FalseReg) const override;
+
+  void insertNoop(MachineBasicBlock &MBB,
+                  MachineBasicBlock::iterator MI) const override;
+
   MCInst getNop() const override;
 
   bool isSchedulingBoundary(const MachineInstr &MI,
@@ -261,8 +275,10 @@ public:
                              SmallVectorImpl<MachineCombinerPattern> &Patterns,
                              bool DoRegPressureReduce) const override;
   /// Return true when Inst is associative and commutative so that it can be
-  /// reassociated.
-  bool isAssociativeAndCommutative(const MachineInstr &Inst) const override;
+  /// reassociated. If Invert is true, then the inverse of Inst operation must
+  /// be checked.
+  bool isAssociativeAndCommutative(const MachineInstr &Inst,
+                                   bool Invert) const override;
   /// When getMachineCombinerPatterns() finds patterns, this function generates
   /// the instructions that could replace the original code sequence
   void genAlternativeCodeSequence(
@@ -286,12 +302,15 @@ public:
 
   bool isFunctionSafeToOutlineFrom(MachineFunction &MF,
                                    bool OutlineFromLinkOnceODRs) const override;
-  outliner::OutlinedFunction getOutliningCandidateInfo(
+  std::optional<outliner::OutlinedFunction> getOutliningCandidateInfo(
       std::vector<outliner::Candidate> &RepeatedSequenceLocs) const override;
+  void mergeOutliningCandidateAttributes(
+      Function &F, std::vector<outliner::Candidate> &Candidates) const override;
   outliner::InstrType
-  getOutliningType(MachineBasicBlock::iterator &MIT, unsigned Flags) const override;
-  bool isMBBSafeToOutlineFrom(MachineBasicBlock &MBB,
-                              unsigned &Flags) const override;
+  getOutliningTypeImpl(MachineBasicBlock::iterator &MIT, unsigned Flags) const override;
+  SmallVector<
+      std::pair<MachineBasicBlock::iterator, MachineBasicBlock::iterator>>
+  getOutlinableRanges(MachineBasicBlock &MBB, unsigned &Flags) const override;
   void buildOutlinedFrame(MachineBasicBlock &MBB, MachineFunction &MF,
                           const outliner::OutlinedFunction &OF) const override;
   MachineBasicBlock::iterator
@@ -314,11 +333,15 @@ public:
   /// on Windows.
   static bool isSEHInstruction(const MachineInstr &MI);
 
-  Optional<RegImmPair> isAddImmediate(const MachineInstr &MI,
-                                      Register Reg) const override;
+  std::optional<RegImmPair> isAddImmediate(const MachineInstr &MI,
+                                           Register Reg) const override;
 
-  Optional<ParamLoadedValue> describeLoadedValue(const MachineInstr &MI,
-                                                 Register Reg) const override;
+  bool isFunctionSafeToSplit(const MachineFunction &MF) const override;
+
+  bool isMBBSafeToSplitToCold(const MachineBasicBlock &MBB) const override;
+
+  std::optional<ParamLoadedValue>
+  describeLoadedValue(const MachineInstr &MI, Register Reg) const override;
 
   unsigned int getTailDuplicateSize(CodeGenOpt::Level OptLevel) const override;
 
@@ -332,6 +355,8 @@ public:
   static void decomposeStackOffsetForDwarfOffsets(const StackOffset &Offset,
                                                   int64_t &ByteSized,
                                                   int64_t &VGSized);
+
+  bool isReallyTriviallyReMaterializable(const MachineInstr &MI) const override;
 #define GET_INSTRINFO_HELPER_DECLS
 #include "AArch64GenInstrInfo.inc"
 
@@ -339,7 +364,7 @@ protected:
   /// If the specific machine instruction is an instruction that moves/copies
   /// value from one register to another register return destination and source
   /// registers as machine operands.
-  Optional<DestSourcePair>
+  std::optional<DestSourcePair>
   isCopyInstrImpl(const MachineInstr &MI) const override;
 
 private:
@@ -389,10 +414,10 @@ struct UsedNZCV {
 
 /// \returns Conditions flags used after \p CmpInstr in its MachineBB if  NZCV
 /// flags are not alive in successors of the same \p CmpInstr and \p MI parent.
-/// \returns None otherwise.
+/// \returns std::nullopt otherwise.
 ///
 /// Collect instructions using that flags in \p CCUseInstrs if provided.
-Optional<UsedNZCV>
+std::optional<UsedNZCV>
 examineCFlagsUse(MachineInstr &MI, MachineInstr &CmpInstr,
                  const TargetRegisterInfo &TRI,
                  SmallVectorImpl<MachineInstr *> *CCUseInstrs = nullptr);
@@ -536,10 +561,11 @@ static inline unsigned getPACOpcodeForKey(AArch64PACKey::ID K, bool Zero) {
 }
 
 // struct TSFlags {
-#define TSFLAG_ELEMENT_SIZE_TYPE(X)      (X)       // 3-bits
-#define TSFLAG_DESTRUCTIVE_INST_TYPE(X) ((X) << 3) // 4-bits
-#define TSFLAG_FALSE_LANE_TYPE(X)       ((X) << 7) // 2-bits
-#define TSFLAG_INSTR_FLAGS(X)           ((X) << 9) // 2-bits
+#define TSFLAG_ELEMENT_SIZE_TYPE(X)      (X)        // 3-bits
+#define TSFLAG_DESTRUCTIVE_INST_TYPE(X) ((X) << 3)  // 4-bits
+#define TSFLAG_FALSE_LANE_TYPE(X)       ((X) << 7)  // 2-bits
+#define TSFLAG_INSTR_FLAGS(X)           ((X) << 9)  // 2-bits
+#define TSFLAG_SME_MATRIX_TYPE(X)       ((X) << 11) // 3-bits
 // }
 
 namespace AArch64 {
@@ -577,14 +603,28 @@ enum FalseLaneType {
 static const uint64_t InstrFlagIsWhile     = TSFLAG_INSTR_FLAGS(0x1);
 static const uint64_t InstrFlagIsPTestLike = TSFLAG_INSTR_FLAGS(0x2);
 
+enum SMEMatrixType {
+  SMEMatrixTypeMask = TSFLAG_SME_MATRIX_TYPE(0x7),
+  SMEMatrixNone     = TSFLAG_SME_MATRIX_TYPE(0x0),
+  SMEMatrixTileB    = TSFLAG_SME_MATRIX_TYPE(0x1),
+  SMEMatrixTileH    = TSFLAG_SME_MATRIX_TYPE(0x2),
+  SMEMatrixTileS    = TSFLAG_SME_MATRIX_TYPE(0x3),
+  SMEMatrixTileD    = TSFLAG_SME_MATRIX_TYPE(0x4),
+  SMEMatrixTileQ    = TSFLAG_SME_MATRIX_TYPE(0x5),
+  SMEMatrixArray    = TSFLAG_SME_MATRIX_TYPE(0x6),
+};
+
 #undef TSFLAG_ELEMENT_SIZE_TYPE
 #undef TSFLAG_DESTRUCTIVE_INST_TYPE
 #undef TSFLAG_FALSE_LANE_TYPE
 #undef TSFLAG_INSTR_FLAGS
+#undef TSFLAG_SME_MATRIX_TYPE
 
 int getSVEPseudoMap(uint16_t Opcode);
 int getSVERevInstr(uint16_t Opcode);
 int getSVENonRevInstr(uint16_t Opcode);
+
+int getSMEPseudoMap(uint16_t Opcode);
 }
 
 } // end namespace llvm

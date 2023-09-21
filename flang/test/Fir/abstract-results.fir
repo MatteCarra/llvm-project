@@ -106,6 +106,33 @@ func.func @retcptr() -> !fir.type<_QM__fortran_builtinsT__builtin_c_ptr{__addres
   // FUNC-BOX: return %[[VAL]] : i64
 }
 
+// FUNC-REF-LABEL:  func private @arrayfunc_callee_declare(
+// FUNC-REF-SAME: %[[buffer:.*]]: !fir.ref<!fir.array<?xf32>>, %[[n:.*]]: index) {
+// FUNC-BOX-LABEL:  func private @arrayfunc_callee_declare(
+// FUNC-BOX-SAME: %[[box:.*]]: !fir.box<!fir.array<?xf32>>, %[[n:.*]]: index) {
+func.func private @arrayfunc_callee_declare(%n : index) -> !fir.array<?xf32> {
+  %buffer_alloc = fir.alloca !fir.array<?xf32>, %n
+  %shape = fir.shape %n : (index) -> !fir.shape<1>
+  %buffer = fir.declare %buffer_alloc(%shape) {uniq_name = "x"}: (!fir.ref<!fir.array<?xf32>>, !fir.shape<1>) -> !fir.ref<!fir.array<?xf32>>
+  // Do something with result (res(4) = 42.)
+  %c4 = arith.constant 4 : i64
+  %coor = fir.coordinate_of %buffer, %c4 : (!fir.ref<!fir.array<?xf32>>, i64) -> !fir.ref<f32>
+  %cst = arith.constant 4.200000e+01 : f32
+  fir.store %cst to %coor : !fir.ref<f32>
+  %res = fir.load %buffer : !fir.ref<!fir.array<?xf32>>
+  return %res : !fir.array<?xf32>
+
+  // FUNC-REF-DAG: %[[buffer_declare:.*]] = fir.declare %[[buffer]](%{{.*}}) {uniq_name = "x"} : (!fir.ref<!fir.array<?xf32>>, !fir.shape<1>) -> !fir.ref<!fir.array<?xf32>>
+  // FUNC-REF-DAG: %[[coor:.*]] = fir.coordinate_of %[[buffer_declare]], %{{.*}} : (!fir.ref<!fir.array<?xf32>>, i64) -> !fir.ref<f32>
+  // FUNC-REF-DAG: fir.store %{{.*}} to %[[coor]] : !fir.ref<f32>
+  // FUNC-REF: return
+
+  // FUNC-BOX: %[[buffer:.*]] = fir.box_addr %[[box]] : (!fir.box<!fir.array<?xf32>>) -> !fir.ref<!fir.array<?xf32>>
+  // FUNC-BOX-DAG: %[[buffer_declare:.*]] = fir.declare %[[buffer]](%{{.*}}) {uniq_name = "x"} : (!fir.ref<!fir.array<?xf32>>, !fir.shape<1>) -> !fir.ref<!fir.array<?xf32>>
+  // FUNC-BOX-DAG: %[[coor:.*]] = fir.coordinate_of %[[buffer_declare]], %{{.*}} : (!fir.ref<!fir.array<?xf32>>, i64) -> !fir.ref<f32>
+  // FUNC-BOX-DAG: fir.store %{{.*}} to %[[coor]] : !fir.ref<f32>
+  // FUNC-BOX: return
+}
 
 // ------------------------ Test caller rewrite --------------------------------
 
@@ -242,6 +269,25 @@ func.func @_QPtest_return_cptr() {
   // FUNC-BOX: %[[FIELD:.*]] = fir.field_index __address, !fir.type<_QM__fortran_builtinsT__builtin_c_ptr{__address:i64}>
   // FUNC-BOX: %[[ADDR:.*]] = fir.coordinate_of %[[ALLOC]], %[[FIELD]] : (!fir.ref<!fir.type<_QM__fortran_builtinsT__builtin_c_ptr{__address:i64}>>, !fir.field) -> !fir.ref<i64>
   // FUNC-BOX: fir.store %[[VAL]] to %[[ADDR]] : !fir.ref<i64>
+}
+
+// FUNC-REF-LABEL: func @dispatch(
+// FUNC-REF-SAME:    %[[ARG0:.*]]: !fir.class<!fir.type<_QMpolymorphic_testTp1{a:i32,b:i32}>> {fir.bindc_name = "a"}
+// FUNC-BOX-LABEL: func @dispatch(
+// FUNC-BOX-SAME:    %[[ARG0:.*]]: !fir.class<!fir.type<_QMpolymorphic_testTp1{a:i32,b:i32}>> {fir.bindc_name = "a"}
+func.func @dispatch(%arg0: !fir.class<!fir.type<_QMpolymorphic_testTp1{a:i32,b:i32}>> {fir.bindc_name = "a"}) {
+  %buffer = fir.alloca !fir.type<t{x:f32}>
+  %res = fir.dispatch "ret_array"(%arg0 : !fir.class<!fir.type<_QMpolymorphic_testTp1{a:i32,b:i32}>>) (%arg0 : !fir.class<!fir.type<_QMpolymorphic_testTp1{a:i32,b:i32}>>) -> !fir.type<t{x:f32}> {pass_arg_pos = 0 : i32}
+  fir.save_result %res to %buffer : !fir.type<t{x:f32}>, !fir.ref<!fir.type<t{x:f32}>>
+  return
+  // FUNC-REF: %[[buffer:.*]] = fir.alloca !fir.type<t{x:f32}>
+  // FUNC-REF: fir.dispatch "ret_array"(%[[ARG0]] : !fir.class<!fir.type<_QMpolymorphic_testTp1{a:i32,b:i32}>>) (%[[buffer]], %[[ARG0]] : !fir.ref<!fir.type<t{x:f32}>>, !fir.class<!fir.type<_QMpolymorphic_testTp1{a:i32,b:i32}>>) {pass_arg_pos = 1 : i32}
+  // FUNC-REF-NOT: fir.save_result
+
+  // FUNC-BOX: %[[buffer:.*]] = fir.alloca !fir.type<t{x:f32}>
+  // FUNC-BOX: %[[box:.*]] = fir.embox %[[buffer]] : (!fir.ref<!fir.type<t{x:f32}>>) -> !fir.box<!fir.type<t{x:f32}>>
+  // FUNC-BOX: fir.dispatch "ret_array"(%[[ARG0]] : !fir.class<!fir.type<_QMpolymorphic_testTp1{a:i32,b:i32}>>) (%[[box]], %[[ARG0]] : !fir.box<!fir.type<t{x:f32}>>, !fir.class<!fir.type<_QMpolymorphic_testTp1{a:i32,b:i32}>>) {pass_arg_pos = 1 : i32}
+  // FUNC-BOX-NOT: fir.save_result
 }
 
 // ------------------------ Test fir.address_of rewrite ------------------------

@@ -670,8 +670,9 @@ CharUnits VCallAndVBaseOffsetBuilder::getCurrentOffsetOffset() const {
   // Under the relative ABI, the offset widths are 32-bit ints instead of
   // pointer widths.
   CharUnits OffsetWidth = Context.toCharUnitsFromBits(
-      VTables.isRelativeLayout() ? 32
-                                 : Context.getTargetInfo().getPointerWidth(0));
+      VTables.isRelativeLayout()
+          ? 32
+          : Context.getTargetInfo().getPointerWidth(LangAS::Default));
   CharUnits OffsetOffset = OffsetWidth * OffsetIndex;
 
   return OffsetOffset;
@@ -1559,6 +1560,8 @@ void ItaniumVTableBuilder::AddMethods(
   std::stable_sort(
       NewImplicitVirtualFunctions.begin(), NewImplicitVirtualFunctions.end(),
       [](const CXXMethodDecl *A, const CXXMethodDecl *B) {
+        if (A == B)
+          return false;
         if (A->isCopyAssignmentOperator() != B->isCopyAssignmentOperator())
           return A->isCopyAssignmentOperator();
         if (A->isMoveAssignmentOperator() != B->isMoveAssignmentOperator())
@@ -2258,7 +2261,7 @@ VTableLayout::VTableLayout(ArrayRef<size_t> VTableIndices,
 VTableLayout::~VTableLayout() { }
 
 bool VTableContextBase::hasVtableSlot(const CXXMethodDecl *MD) {
-  return MD->isVirtual() && !MD->isConsteval();
+  return MD->isVirtual() && !MD->isImmediateFunction();
 }
 
 ItaniumVTableContext::ItaniumVTableContext(

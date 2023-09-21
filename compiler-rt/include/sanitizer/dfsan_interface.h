@@ -31,6 +31,14 @@ typedef void (*dfsan_write_callback_t)(int fd, const void *buf, size_t count);
 typedef void (*dfsan_conditional_callback_t)(dfsan_label label,
                                              dfsan_origin origin);
 
+/// Signature of the callback argument to dfsan_set_reaches_function_callback().
+/// The description is intended to hold the name of the variable.
+typedef void (*dfsan_reaches_function_callback_t)(dfsan_label label,
+                                                  dfsan_origin origin,
+                                                  const char *file,
+                                                  unsigned int line,
+                                                  const char *function);
+
 /// Computes the union of \c l1 and \c l2, resulting in a union label.
 dfsan_label dfsan_union(dfsan_label l1, dfsan_label l2);
 
@@ -62,7 +70,7 @@ dfsan_label dfsan_read_label(const void *addr, size_t size);
 /// from the address addr.
 dfsan_origin dfsan_read_origin_of_first_taint(const void *addr, size_t size);
 
-/// Returns whether the given label label contains the label elem.
+/// Returns whether the given label contains the label elem.
 int dfsan_has_label(dfsan_label label, dfsan_label elem);
 
 /// Flushes the DFSan shadow, i.e. forgets about all labels currently associated
@@ -90,6 +98,18 @@ void dfsan_set_conditional_callback(dfsan_conditional_callback_t callback);
 /// handlers will add the labels they see into a global (bitwise-or together).
 /// This function returns all label bits seen in signal handler conditions.
 dfsan_label dfsan_get_labels_in_signal_conditional();
+
+/// Sets a callback to be invoked when tainted data reaches a function.
+/// This could occur at function entry, or at a load instruction.
+/// These callbacks will only be added if -dfsan-reaches-function-callbacks=1.
+void dfsan_set_reaches_function_callback(
+    dfsan_reaches_function_callback_t callback);
+
+/// Making callbacks that handle signals well is tricky, so when
+/// -dfsan-reaches-function-callbacks=true, functions reached in signal
+/// handlers will add the labels they see into a global (bitwise-or together).
+/// This function returns all label bits seen during signal handlers.
+dfsan_label dfsan_get_labels_in_signal_reaches_function();
 
 /// Interceptor hooks.
 /// Whenever a dfsan's custom function is called the corresponding

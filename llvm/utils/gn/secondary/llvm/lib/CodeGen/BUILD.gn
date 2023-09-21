@@ -1,3 +1,18 @@
+static_library("CodeGenTypes") {
+  output_name = "LLVMCodeGenType"
+  public_deps = [
+    # Must be a public_dep because CodeGen's headers include llvm-config.h.
+    "//llvm/include/llvm/Config:llvm-config",
+  ]
+  deps = [
+    "//llvm/include/llvm/CodeGen:GenVT",
+    "//llvm/lib/Support",
+  ]
+  sources = [
+    "LowLevelType.cpp"
+  ]
+}
+
 static_library("CodeGen") {
   output_name = "LLVMCodeGen"
   public_deps = [
@@ -5,6 +20,7 @@ static_library("CodeGen") {
     "//llvm/include/llvm/Config:llvm-config",
   ]
   deps = [
+    "//llvm/include/llvm/CodeGen:GenVT",
     "//llvm/lib/Analysis",
     "//llvm/lib/Bitcode/Reader",
     "//llvm/lib/Bitcode/Writer",
@@ -13,6 +29,7 @@ static_library("CodeGen") {
     "//llvm/lib/ProfileData",
     "//llvm/lib/Support",
     "//llvm/lib/Target",
+    "//llvm/lib/TargetParser",
     "//llvm/lib/Transforms/ObjCARC",
     "//llvm/lib/Transforms/Scalar",
     "//llvm/lib/Transforms/Utils",
@@ -21,6 +38,7 @@ static_library("CodeGen") {
     "AggressiveAntiDepBreaker.cpp",
     "AllocationOrder.cpp",
     "Analysis.cpp",
+    "AssignmentTrackingAnalysis.cpp",
     "AtomicExpandPass.cpp",
     "BasicBlockSections.cpp",
     "BasicBlockSectionsProfileReader.cpp",
@@ -31,13 +49,16 @@ static_library("CodeGen") {
     "CFGuardLongjmp.cpp",
     "CFIFixup.cpp",
     "CFIInstrInserter.cpp",
+    "GCEmptyBasicBlocks.cpp",
     "CalcSpillWeights.cpp",
+    "CallBrPrepare.cpp",
     "CallingConvLower.cpp",
     "CodeGen.cpp",
     "CodeGenCommonISel.cpp",
     "CodeGenPassBuilder.cpp",
     "CodeGenPrepare.cpp",
     "CommandFlags.cpp",
+    "ComplexDeinterleavingPass.cpp",
     "CriticalAntiDepBreaker.cpp",
     "DFAPacketizer.cpp",
     "DeadMachineInstructionElim.cpp",
@@ -48,6 +69,7 @@ static_library("CodeGen") {
     "EdgeBundles.cpp",
     "ExecutionDomainFix.cpp",
     "ExpandLargeDivRem.cpp",
+    "ExpandLargeFpConvert.cpp",
     "ExpandMemCmp.cpp",
     "ExpandPostRAPseudos.cpp",
     "ExpandReductions.cpp",
@@ -71,6 +93,7 @@ static_library("CodeGen") {
     "InterleavedLoadCombinePass.cpp",
     "IntrinsicLowering.cpp",
     "JMCInstrumenter.cpp",
+    "KCFI.cpp",
     "LLVMTargetMachine.cpp",
     "LatencyPriorityQueue.cpp",
     "LazyMachineBlockFrequencyInfo.cpp",
@@ -94,6 +117,7 @@ static_library("CodeGen") {
     "LocalStackSlotAllocation.cpp",
     "LoopTraversal.cpp",
     "LowLevelType.cpp",
+    "LowLevelTypeUtils.cpp",
     "LowerEmuTLS.cpp",
     "MBFIWrapper.cpp",
     "MIRCanonicalizerPass.cpp",
@@ -104,8 +128,8 @@ static_library("CodeGen") {
     "MIRSampleProfile.cpp",
     "MIRVRegNamerUtils.cpp",
     "MIRYamlMapping.cpp",
-    "MLRegallocEvictAdvisor.cpp",
-    "MLRegallocPriorityAdvisor.cpp",
+    "MLRegAllocEvictAdvisor.cpp",
+    "MLRegAllocPriorityAdvisor.cpp",
     "MachineBasicBlock.cpp",
     "MachineBlockFrequencyInfo.cpp",
     "MachineBlockPlacement.cpp",
@@ -127,6 +151,7 @@ static_library("CodeGen") {
     "MachineInstr.cpp",
     "MachineInstrBundle.cpp",
     "MachineLICM.cpp",
+    "MachineLateInstrsCleanup.cpp",
     "MachineLoopInfo.cpp",
     "MachineLoopUtils.cpp",
     "MachineModuleInfo.cpp",
@@ -148,6 +173,7 @@ static_library("CodeGen") {
     "MachineStableHash.cpp",
     "MachineStripDebug.cpp",
     "MachineTraceMetrics.cpp",
+    "MachineUniformityAnalysis.cpp",
     "MachineVerifier.cpp",
     "MacroFusion.cpp",
     "ModuloSchedule.cpp",
@@ -193,6 +219,7 @@ static_library("CodeGen") {
     "ResetMachineFunctionPass.cpp",
     "SafeStack.cpp",
     "SafeStackLayout.cpp",
+    "SanitizerBinaryMetadata.cpp",
     "ScheduleDAG.cpp",
     "ScheduleDAGInstrs.cpp",
     "ScheduleDAGPrinter.cpp",
@@ -205,6 +232,7 @@ static_library("CodeGen") {
     "SpillPlacement.cpp",
     "SplitKit.cpp",
     "StackColoring.cpp",
+    "StackFrameLayoutAnalysisPass.cpp",
     "StackMapLivenessAnalysis.cpp",
     "StackMaps.cpp",
     "StackProtector.cpp",

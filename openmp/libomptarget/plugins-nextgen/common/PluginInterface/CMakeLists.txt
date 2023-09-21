@@ -10,23 +10,86 @@
 #
 ##===----------------------------------------------------------------------===##
 
-# Plugin Interface library.
-add_library(PluginInterface OBJECT PluginInterface.cpp GlobalHandler.cpp)
+# NOTE: Don't try to build `PluginInterface` using `add_llvm_library` because we
+# don't want to export `PluginInterface` while `add_llvm_library` requires that.
+add_library(PluginInterface OBJECT
+  PluginInterface.cpp GlobalHandler.cpp JIT.cpp RPC.cpp)
 
-# Define the TARGET_NAME.
-add_definitions("-DTARGET_NAME=PluginInterface")
+# Only enable JIT for those targets that LLVM can support.
+string(TOUPPER "${LLVM_TARGETS_TO_BUILD}" TargetsSupported)
+foreach(Target ${TargetsSupported})
+  target_compile_definitions(PluginInterface PRIVATE "LIBOMPTARGET_JIT_${Target}")
+endforeach()
 
-# Define the DEBUG_PREFIX.
-add_definitions(-DDEBUG_PREFIX="PluginInterface")
-
-set_property(TARGET PluginInterface PROPERTY POSITION_INDEPENDENT_CODE ON)
+# This is required when using LLVM libraries.
 llvm_update_compile_flags(PluginInterface)
-set(LINK_LLVM_LIBS LLVMSupport)
-if (LLVM_LINK_LLVM_DYLIB)
-  set(LINK_LLVM_LIBS LLVM)
-endif()
-target_link_libraries(PluginInterface INTERFACE ${LINK_LLVM_LIBS} PRIVATE elf_common MemoryManager)
-add_dependencies(PluginInterface ${LINK_LLVM_LIBS})
 
-target_include_directories(PluginInterface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
-target_include_directories(PluginInterface PRIVATE ${LIBOMPTARGET_INCLUDE_DIR})
+if (LLVM_LINK_LLVM_DYLIB)
+  set(llvm_libs LLVM)
+else()
+  llvm_map_components_to_libnames(llvm_libs
+    ${LLVM_TARGETS_TO_BUILD}
+    AggressiveInstCombine
+    Analysis
+    BinaryFormat
+    BitReader
+    BitWriter
+    CodeGen
+    Core
+    Extensions
+    InstCombine
+    Instrumentation
+    IPO
+    IRReader
+    Linker
+    MC
+    Object
+    Passes
+    Remarks
+    ScalarOpts
+    Support
+    Target
+    TargetParser
+    TransformUtils
+    Vectorize
+  )
+endif()
+
+target_link_libraries(PluginInterface
+  PUBLIC
+    ${llvm_libs}
+    elf_common
+    MemoryManager
+)
+
+# Include the RPC server from the `libc` project if availible.
+if(TARGET llvmlibc_rpc_server AND ${LIBOMPTARGET_GPU_LIBC_SUPPORT})
+  target_link_libraries(PluginInterface PRIVATE llvmlibc_rpc_server)
+  target_compile_definitions(PluginInterface PRIVATE LIBOMPTARGET_RPC_SUPPORT)
+elseif(${LIBOMPTARGET_GPU_LIBC_SUPPORT})
+  find_library(llvmlibc_rpc_server NAMES llvmlibc_rpc_server
+               PATHS ${LIBOMPTARGET_LLVM_LIBRARY_DIR} NO_DEFAULT_PATH)
+  if(llvmlibc_rpc_server)
+    target_link_libraries(PluginInterface PRIVATE llvmlibc_rpc_server)
+    target_compile_definitions(PluginInterface PRIVATE LIBOMPTARGET_RPC_SUPPORT)
+  endif()
+endif()
+
+if ((OMPT_TARGET_DEFAULT) AND (LIBOMPTARGET_OMPT_SUPPORT))
+  target_link_libraries(PluginInterface PUBLIC OMPT)
+endif()
+
+# Define the TARGET_NAME and DEBUG_PREFIX.
+target_compile_definitions(PluginInterface PRIVATE
+  TARGET_NAME="PluginInterface"
+  DEBUG_PREFIX="PluginInterface"
+)
+
+target_include_directories(PluginInterface
+  INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}
+  PRIVATE ${LIBOMPTARGET_INCLUDE_DIR}
+)
+
+set_target_properties(PluginInterface PROPERTIES
+  POSITION_INDEPENDENT_CODE ON
+  CXX_VISIBILITY_PRESET protected)

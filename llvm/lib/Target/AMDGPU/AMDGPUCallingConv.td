@@ -99,7 +99,7 @@ def CC_SI_SHADER : CallingConv<[
 
 def RetCC_SI_Shader : CallingConv<[
   CCIfType<[i1, i16], CCIfExtend<CCPromoteToType<i32>>>,
-  CCIfType<[i32, i16] , CCAssignToReg<[
+  CCIfType<[i32, i16, v2i16] , CCAssignToReg<[
     SGPR0, SGPR1, SGPR2, SGPR3, SGPR4, SGPR5, SGPR6, SGPR7,
     SGPR8, SGPR9, SGPR10, SGPR11, SGPR12, SGPR13, SGPR14, SGPR15,
     SGPR16, SGPR17, SGPR18, SGPR19, SGPR20, SGPR21, SGPR22, SGPR23,
@@ -211,6 +211,16 @@ def CC_AMDGPU : CallingConv<[
          "(State.getMachineFunction().getSubtarget()).getGeneration() >= "
            "AMDGPUSubtarget::SOUTHERN_ISLANDS && State.getCallingConv() == CallingConv::C",
         CCDelegateTo<CC_AMDGPU_Func>>
+]>;
+
+def CC_AMDGPU_CS_CHAIN : CallingConv<[
+  CCIfInReg<CCIfType<[f32, i32, f16, i16, v2i16, v2f16] , CCAssignToReg<
+    !foreach(i, !range(105), !cast<Register>("SGPR"#i))
+  >>>,
+
+  CCIfNotInReg<CCIfType<[f32, i32, f16, i16, v2i16, v2f16] , CCAssignToReg<
+    !foreach(i, !range(8, 255), !cast<Register>("VGPR"#i))
+  >>>
 ]>;
 
 // Trivial class to denote when a def is used only to get a RegMask, i.e.

@@ -399,11 +399,8 @@ Below is an example of constructing a pipeline that operates on the above
 structure:
 
 ```c++
-// Create a top-level `PassManager` class. If an operation type is not
-// explicitly specific, the default is the builtin `module` operation.
-PassManager pm(ctx);
-// Note: We could also create the above `PassManager` this way.
-PassManager pm(ctx, /*operationName=*/"builtin.module");
+// Create a top-level `PassManager` class.
+auto pm = PassManager::on<ModuleOp>(ctx);
 
 // Add a pass on the top-level module operation.
 pm.addPass(std::make_unique<MyModulePass>());
@@ -763,7 +760,7 @@ Pass::getArgument()` to specify the argument used when registering a pass.
 ## Declarative Pass Specification
 
 Some aspects of a Pass may be specified declaratively, in a form similar to
-[operations](OpDefinitions.md). This specification simplifies several mechanisms
+[operations](DefiningDialects/Operations.md). This specification simplifies several mechanisms
 used when defining passes. It can be used for generating pass registration
 calls, defining boilerplate pass utilities, and generating pass documentation.
 
@@ -1336,9 +1333,9 @@ module {
 #-}
 ```
 
-The configuration dumped can be passed to `mlir-opt`. This will result in
-parsing the configuration of the reproducer and adjusting the necessary opt
-state, e.g. configuring the pass manager, context, etc.
+The configuration dumped can be passed to `mlir-opt` by specifying
+`-run-reproducer` flag. This will result in parsing the configuration of the reproducer
+and adjusting the necessary opt state, e.g. configuring the pass manager, context, etc.
 
 Beyond specifying a filename, one can also register a `ReproducerStreamFactory`
 function that would be invoked in the case of a crash and the reproducer written

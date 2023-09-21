@@ -872,7 +872,7 @@ bool CodeGenRegisterClass::hasType(const ValueTypeByHwMode &VT) const {
   // If VT is not identical to any of this class's types, but is a simple
   // type, check if any of the types for this class contain it under some
   // mode.
-  // The motivating example came from RISCV, where (likely because of being
+  // The motivating example came from RISC-V, where (likely because of being
   // guarded by "64-bit" predicate), the type of X5 was {*:[i64]}, but the
   // type in GRC was {*:[i32], m1:[i64]}.
   if (VT.isSimple()) {
@@ -965,11 +965,20 @@ static bool TopoOrderRC(const CodeGenRegisterClass &PA,
   return StringRef(A->getName()) < B->getName();
 }
 
+std::string CodeGenRegisterClass::getNamespaceQualification() const {
+  return Namespace.empty() ? "" : (Namespace + "::").str();
+}
+
 std::string CodeGenRegisterClass::getQualifiedName() const {
-  if (Namespace.empty())
-    return getName();
-  else
-    return (Namespace + "::" + getName()).str();
+  return getNamespaceQualification() + getName();
+}
+
+std::string CodeGenRegisterClass::getIdName() const {
+  return getName() + "RegClassID";
+}
+
+std::string CodeGenRegisterClass::getQualifiedIdName() const {
+  return getNamespaceQualification() + getIdName();
 }
 
 // Compute sub-classes of all register classes.
@@ -1024,7 +1033,7 @@ void CodeGenRegisterClass::computeSubClasses(CodeGenRegBank &RegBank) {
       RC.inheritProperties(RegBank);
 }
 
-Optional<std::pair<CodeGenRegisterClass *, CodeGenRegisterClass *>>
+std::optional<std::pair<CodeGenRegisterClass *, CodeGenRegisterClass *>>
 CodeGenRegisterClass::getMatchingSubClassWithSubRegs(
     CodeGenRegBank &RegBank, const CodeGenSubRegIndex *SubIdx) const {
   auto SizeOrder = [this](const CodeGenRegisterClass *A,
@@ -1044,7 +1053,7 @@ CodeGenRegisterClass::getMatchingSubClassWithSubRegs(
   // index and order them by size. BiggestSuperRC should always be first.
   CodeGenRegisterClass *BiggestSuperRegRC = getSubClassWithSubReg(SubIdx);
   if (!BiggestSuperRegRC)
-    return None;
+    return std::nullopt;
   BitVector SuperRegRCsBV = BiggestSuperRegRC->getSubClasses();
   std::vector<CodeGenRegisterClass *> SuperRegRCs;
   for (auto &RC : RegClasses)
@@ -1107,7 +1116,7 @@ CodeGenRegisterClass::getMatchingSubClassWithSubRegs(
       return std::make_pair(ChosenSuperRegClass, SubRegRC);
   }
 
-  return None;
+  return std::nullopt;
 }
 
 void CodeGenRegisterClass::getSuperRegClasses(const CodeGenSubRegIndex *SubIdx,
@@ -1369,11 +1378,15 @@ getConcatSubRegIndex(const SmallVector<CodeGenSubRegIndex *, 8> &Parts) {
   unsigned Size = Parts.front()->Size;
   unsigned LastOffset = Parts.front()->Offset;
   unsigned LastSize = Parts.front()->Size;
+  unsigned UnknownSize = (uint16_t)-1;
   for (unsigned i = 1, e = Parts.size(); i != e; ++i) {
     Name += '_';
     Name += Parts[i]->getName();
-    Size += Parts[i]->Size;
-    if (Parts[i]->Offset != (LastOffset + LastSize))
+    if (Size == UnknownSize || Parts[i]->Size == UnknownSize)
+      Size = UnknownSize;
+    else
+      Size += Parts[i]->Size;
+    if (LastSize == UnknownSize || Parts[i]->Offset != (LastOffset + LastSize))
       isContinuous = false;
     LastOffset = Parts[i]->Offset;
     LastSize = Parts[i]->Size;
@@ -1655,8 +1668,8 @@ static void computeUberSets(std::vector<UberRegSet> &UberSets,
          "register enum value mismatch");
 
   // For simplicitly make the SetID the same as EnumValue.
-  IntEqClasses UberSetIDs(Registers.size()+1);
-  std::set<unsigned> AllocatableRegs;
+  IntEqClasses UberSetIDs(Registers.size() + 1);
+  BitVector AllocatableRegs(Registers.size() + 1);
   for (auto &RegClass : RegBank.getRegClasses()) {
     if (!RegClass.Allocatable)
       continue;
@@ -1668,16 +1681,16 @@ static void computeUberSets(std::vector<UberRegSet> &UberSets,
     unsigned USetID = UberSetIDs.findLeader((*Regs.begin())->EnumValue);
     assert(USetID && "register number 0 is invalid");
 
-    AllocatableRegs.insert((*Regs.begin())->EnumValue);
+    AllocatableRegs.set((*Regs.begin())->EnumValue);
     for (const CodeGenRegister *CGR : llvm::drop_begin(Regs)) {
-      AllocatableRegs.insert(CGR->EnumValue);
+      AllocatableRegs.set(CGR->EnumValue);
       UberSetIDs.join(USetID, CGR->EnumValue);
     }
   }
   // Combine non-allocatable regs.
   for (const auto &Reg : Registers) {
     unsigned RegNum = Reg.EnumValue;
-    if (AllocatableRegs.count(RegNum))
+    if (AllocatableRegs.test(RegNum))
       continue;
 
     UberSetIDs.join(0, RegNum);
@@ -1700,7 +1713,6 @@ static void computeUberSets(std::vector<UberRegSet> &UberSets,
 
     UberRegSet *USet = &UberSets[USetID];
     USet->Regs.push_back(&Reg);
-    sortAndUniqueRegisters(USet->Regs);
     RegSets[i++] = USet;
   }
 }
@@ -2111,8 +2123,8 @@ void CodeGenRegBank::computeRegUnitLaneMasks() {
   for (auto &Register : Registers) {
     // Create an initial lane mask for all register units.
     const auto &RegUnits = Register.getRegUnits();
-    CodeGenRegister::RegUnitLaneMaskList
-        RegUnitLaneMasks(RegUnits.count(), LaneBitmask::getNone());
+    CodeGenRegister::RegUnitLaneMaskList RegUnitLaneMasks(
+        RegUnits.count(), LaneBitmask::getAll());
     // Iterate through SubRegisters.
     typedef CodeGenRegister::SubRegMap SubRegMap;
     const SubRegMap &SubRegs = Register.getSubRegs();
@@ -2131,7 +2143,7 @@ void CodeGenRegBank::computeRegUnitLaneMasks() {
         unsigned u = 0;
         for (unsigned RU : RegUnits) {
           if (SUI == RU) {
-            RegUnitLaneMasks[u] |= LaneMask;
+            RegUnitLaneMasks[u] &= LaneMask;
             assert(!Found);
             Found = true;
           }

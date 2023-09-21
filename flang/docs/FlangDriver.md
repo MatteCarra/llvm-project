@@ -149,11 +149,6 @@ flang-new -ccc-print-phases -c file.f
 +- 3: backend, {2}, assembler
 4: assembler, {3}, object
 ```
-Note that currently Flang does not support code-generation and `flang-new` will
-fail during the second step above with the following error:
-```bash
-error: code-generation is not available yet
-```
 The other phases are printed nonetheless when using `-ccc-print-phases`, as
 that reflects what `clangDriver`, the library, will try to create and run.
 
@@ -245,16 +240,14 @@ at times. Sometimes the easiest approach is to find an existing option that has
 similar semantics to your new option and start by copying that.
 
 For every new option, you will also have to define the visibility of the new
-option. This is controlled through the `Flags` field. You can use the following
-Flang specific option flags to control this:
+option. This is controlled through the `Visibility` field. You can use the
+following Flang specific visibility flags to control this:
   * `FlangOption` - this option will be available in the `flang-new` compiler driver,
   * `FC1Option` - this option will be available in the `flang-new -fc1` frontend driver,
-  * `FlangOnlyOption` - this option will not be visible in Clang drivers.
 
-Please make sure that options that you add are only visible in drivers that can
-support it. For example, options that only make sense for Fortran input files
-(e.g. `-ffree-form`) should not be visible in Clang and be marked as
-`FlangOnlyOption`.
+Options that are supported by clang should explicitly specify `ClangOption` in
+`Visibility`, and options that are only supported in Flang should not specify
+`ClangOption`.
 
 When deciding what `OptionGroup` to use when defining a new option in the
 `Options.td` file, many new options fall into one of the following two
@@ -276,12 +269,12 @@ two different places, depending on which driver they belong to:
 The parsing will depend on the semantics encoded in the TableGen definition.
 
 When adding a compiler driver option (i.e. an option that contains
-`FlangOption` among its `Flags`) that you also intend to be understood by the
-frontend, make sure that it is either forwarded to `flang-new -fc1` or translated
-into some other option that is accepted by the frontend driver. In the case of
-options that contain both `FlangOption` and `FC1Option` among its flags, we
-usually just forward from `flang-new` to `flang-new -fc1`. This is then tested in
-`flang/test/Driver/frontend-forward.F90`.
+`FlangOption` among in it's `Visibility`) that you also intend to be understood
+by the frontend, make sure that it is either forwarded to `flang-new -fc1` or
+translated into some other option that is accepted by the frontend driver. In
+the case of options that contain both `FlangOption` and `FC1Option` among its
+flags, we usually just forward from `flang-new` to `flang-new -fc1`. This is
+then tested in `flang/test/Driver/frontend-forward.F90`.
 
 What follows is usually very dependant on the meaning of the corresponding
 option. In general, regular compiler flags (e.g. `-ffree-form`) are mapped to
@@ -330,16 +323,13 @@ As of [#7246](https://gitlab.kitware.com/cmake/cmake/-/merge_requests/7246)
 supported Fortran compiler. You can configure your CMake projects to use
 `flang-new` as follows:
 ```bash
-cmake -DCMAKE_Fortran_FLAGS="-flang-experimental-exec" -DCMAKE_Fortran_COMPILER=<path/to/flang-new> <src/dir>
+cmake -DCMAKE_Fortran_COMPILER=<path/to/flang-new> <src/dir>
 ```
 You should see the following in the output:
 ```
 -- The Fortran compiler identification is LLVMFlang <version>
 ```
-where `<version>` corresponds to the LLVM Flang version. Note that while
-generating executables remains experimental, you will need to inform CMake to
-use the `-flang-experimental-exec` flag when invoking `flang-new` as in the
-example above.
+where `<version>` corresponds to the LLVM Flang version.
 
 # Testing
 In LIT, we define two variables that you can use to invoke Flang's drivers:
@@ -485,7 +475,7 @@ reports an error diagnostic and returns `nullptr`.
 For in-tree plugins, there is the CMake flag `FLANG_PLUGIN_SUPPORT`, enabled by
 default, that controls the exporting of executable symbols from `flang-new`,
 which plugins need access to. Additionally, there is the CMake flag
-`FLANG_BUILD_EXAMPLES`, turned off by default, that is used to control if the
+`LLVM_BUILD_EXAMPLES`, turned off by default, that is used to control if the
 example programs are built. This includes plugins that are in the
 `flang/example` directory and added as a `sub_directory` to the
 `flang/examples/CMakeLists.txt`, for example, the `PrintFlangFunctionNames`
@@ -544,3 +534,58 @@ into `flang-new` as built-in middle-end passes.
 See the
 [`WritingAnLLVMNewPMPass`](https://llvm.org/docs/WritingAnLLVMNewPMPass.html#id9)
 documentation for more details.
+
+## Ofast and Fast Math
+`-Ofast` in Flang means `-O3 -ffast-math -fstack-arrays`.
+
+`-ffast-math` means the following:
+ - `-fno-honor-infinities`
+ - `-fno-honor-nans`
+ - `-fassociative-math`
+ - `-freciprocal-math`
+ - `-fapprox-func`
+ - `-fno-signed-zeros`
+ - `-ffp-contract=fast`
+
+These correspond to LLVM IR Fast Math attributes:
+https://llvm.org/docs/LangRef.html#fast-math-flags
+
+When `-ffast-math` is specified, any linker steps generated by the compiler
+driver will also link to `crtfastmath.o`, which adds a static constructor
+that sets the FTZ/DAZ bits in MXCSR, affecting not only the current only the
+current compilation unit but all static and shared libraries included in the
+program. Setting these bits causes denormal floating point numbers to be flushed
+to zero.
+
+### Comparison with GCC/GFortran
+GCC/GFortran translate `-Ofast` to
+`-O3 -ffast-math -fstack-arrays -fno-semantic-interposition`.
+`-fno-semantic-interposition` is not used because Clang does not enable this as
+part of `-Ofast` as the default behaviour is similar.
+
+GCC/GFortran has a wider definition of `-ffast-math`: also including
+`-fno-trapping-math`,  `-fno-rounding-math`, and  `-fsignaling-nans`; these
+aren't included in Flang because Flang currently has no support for strict
+floating point and so always acts as though these flags were specified.
+
+GCC/GFortran will also set flush-to-zero mode: linking `crtfastmath.o`, the same
+as Flang.
+
+The only GCC/GFortran warning option currently supported is `-Werror`.  Passing
+any unsupported GCC/GFortran warning flags into Flang's compiler driver will
+result in warnings being emitted.
+
+### Comparison with nvfortran
+nvfortran defines `-fast` as
+`-O2 -Munroll=c:1 -Mnoframe -Mlre -Mpre -Mvect=simd -Mcache_align -Mflushz -Mvect`.
+ - `-O2 -Munroll=c:1 -Mlre -Mautoinline -Mpre -Mvect-simd` affect code
+   optimization. `flang -O3` should enable all optimizations for execution time,
+   similarly to `clang -O3`. The `-O3` pipeline has passes that perform
+   transformations like inlining, vectorisation, unrolling, etc. Additionally,
+   the GVN and LICM passes perform redundancy elimination like `Mpre` and `Mlre`
+ - `-Mnoframe`: the equivalent flag would be `-fomit-frame-pointer`. This flag
+   is not yet supported in Flang and so Flang follows GFortran in not including
+   this in `-Ofast`. There is no plan to include this flag as part of `-Ofast`.
+ - `-Mcache_align`: there is no equivalent flag in Flang or Clang.
+ - `-Mflushz`: flush-to-zero mode - when `-ffast-math` is specified, Flang will
+   link to `crtfastmath.o` to ensure denormal numbers are flushed to zero.

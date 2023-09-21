@@ -137,9 +137,14 @@ func.func @powf_scalar(%lhs: f32, %rhs: f32) -> f32 {
   // CHECK: %[[F0:.+]] = spirv.Constant 0.000000e+00 : f32
   // CHECK: %[[LT:.+]] = spirv.FOrdLessThan %[[LHS]], %[[F0]] : f32
   // CHECK: %[[ABS:.+]] = spirv.GL.FAbs %[[LHS]] : f32
+  // CHECK: %[[IRHS:.+]] = spirv.ConvertFToS
+  // CHECK: %[[CST1:.+]] = spirv.Constant 1 : i32
+  // CHECK: %[[REM:.+]] = spirv.BitwiseAnd %[[IRHS]]
+  // CHECK: %[[ODD:.+]] = spirv.IEqual %[[REM]], %[[CST1]] : i32
   // CHECK: %[[POW:.+]] = spirv.GL.Pow %[[ABS]], %[[RHS]] : f32
   // CHECK: %[[NEG:.+]] = spirv.FNegate %[[POW]] : f32
-  // CHECK: %[[SEL:.+]] = spirv.Select %[[LT]], %[[NEG]], %[[POW]] : i1, f32
+  // CHECK: %[[SNEG:.+]] = spirv.LogicalAnd %[[LT]], %[[ODD]] : i1
+  // CHECK: %[[SEL:.+]] = spirv.Select %[[SNEG]], %[[NEG]], %[[POW]] : i1, f32
   %0 = math.powf %lhs, %rhs : f32
   // CHECK: return %[[SEL]]
   return %0: f32
@@ -149,6 +154,8 @@ func.func @powf_scalar(%lhs: f32, %rhs: f32) -> f32 {
 func.func @powf_vector(%lhs: vector<4xf32>, %rhs: vector<4xf32>) -> vector<4xf32> {
   // CHECK: spirv.FOrdLessThan
   // CHECK: spirv.GL.FAbs
+  // CHECK: spirv.BitwiseAnd %{{.*}} : vector<4xi32>
+  // CHECK: spirv.IEqual %{{.*}} : vector<4xi32>
   // CHECK: spirv.GL.Pow %{{.*}}: vector<4xf32>
   // CHECK: spirv.FNegate
   // CHECK: spirv.Select
@@ -208,6 +215,54 @@ func.func @ctlz_vector2(%val: vector<2xi16>) -> vector<2xi16> {
   // CHECK: math.ctlz
   %0 = math.ctlz %val : vector<2xi16>
   return %0 : vector<2xi16>
+}
+
+} // end module
+
+// -----
+
+module attributes {
+  spirv.target_env = #spirv.target_env<#spirv.vce<v1.0, [Shader], []>, #spirv.resource_limits<>>
+} {
+
+// 2-D vectors are not supported.
+
+// CHECK-LABEL: @vector_2d
+func.func @vector_2d(%arg0: vector<2x2xf32>) {
+  // CHECK-NEXT: math.cos {{.+}} : vector<2x2xf32>
+  %0 = math.cos %arg0 : vector<2x2xf32>
+  // CHECK-NEXT: math.exp {{.+}} : vector<2x2xf32>
+  %1 = math.exp %arg0 : vector<2x2xf32>
+  // CHECK-NEXT: math.absf {{.+}} : vector<2x2xf32>
+  %2 = math.absf %arg0 : vector<2x2xf32>
+  // CHECK-NEXT: math.ceil {{.+}} : vector<2x2xf32>
+  %3 = math.ceil %arg0 : vector<2x2xf32>
+  // CHECK-NEXT: math.floor {{.+}} : vector<2x2xf32>
+  %4 = math.floor %arg0 : vector<2x2xf32>
+  // CHECK-NEXT: math.powf {{.+}}, {{%.+}} : vector<2x2xf32>
+  %5 = math.powf %arg0, %arg0 : vector<2x2xf32>
+  // CHECK-NEXT: return
+  return
+}
+
+// Tensors are not supported.
+
+// CHECK-LABEL: @tensor_1d
+func.func @tensor_1d(%arg0: tensor<2xf32>) {
+  // CHECK-NEXT: math.cos {{.+}} : tensor<2xf32>
+  %0 = math.cos %arg0 : tensor<2xf32>
+  // CHECK-NEXT: math.exp {{.+}} : tensor<2xf32>
+  %1 = math.exp %arg0 : tensor<2xf32>
+  // CHECK-NEXT: math.absf {{.+}} : tensor<2xf32>
+  %2 = math.absf %arg0 : tensor<2xf32>
+  // CHECK-NEXT: math.ceil {{.+}} : tensor<2xf32>
+  %3 = math.ceil %arg0 : tensor<2xf32>
+  // CHECK-NEXT: math.floor {{.+}} : tensor<2xf32>
+  %4 = math.floor %arg0 : tensor<2xf32>
+  // CHECK-NEXT: math.powf {{.+}}, {{%.+}} : tensor<2xf32>
+  %5 = math.powf %arg0, %arg0 : tensor<2xf32>
+  // CHECK-NEXT: return
+  return
 }
 
 } // end module

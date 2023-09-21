@@ -30,7 +30,7 @@ public:
   static IntegerValueRange getMaxRange(Value value);
 
   /// Create an integer value range lattice value.
-  IntegerValueRange(Optional<ConstantIntRanges> value = None)
+  IntegerValueRange(std::optional<ConstantIntRanges> value = std::nullopt)
       : value(std::move(value)) {}
 
   /// Whether the range is uninitialized. This happens when the state hasn't
@@ -63,7 +63,7 @@ public:
 
 private:
   /// The known integer value range.
-  Optional<ConstantIntRanges> value;
+  std::optional<ConstantIntRanges> value;
 };
 
 /// This lattice element represents the integer value range of an SSA value.
@@ -82,9 +82,9 @@ public:
 /// using operations that define `InferIntRangeInterface` and also sets the
 /// range of iteration indices of loops with known bounds.
 class IntegerRangeAnalysis
-    : public SparseDataFlowAnalysis<IntegerValueRangeLattice> {
+    : public SparseForwardDataFlowAnalysis<IntegerValueRangeLattice> {
 public:
-  using SparseDataFlowAnalysis::SparseDataFlowAnalysis;
+  using SparseForwardDataFlowAnalysis::SparseForwardDataFlowAnalysis;
 
   /// At an entry point, we cannot reason about interger value ranges.
   void setToEntryState(IntegerValueRangeLattice *lattice) override {

@@ -38,23 +38,22 @@
 #define LLVM_ANALYSIS_ALIASANALYSIS_H
 
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/Sequence.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Analysis/MemoryLocation.h"
-#include "llvm/IR/ModRef.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/Pass.h"
+#include "llvm/Support/ModRef.h"
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace llvm {
 
 class AnalysisUsage;
 class AtomicCmpXchgInst;
-class BasicAAResult;
 class BasicBlock;
 class CatchPadInst;
 class CatchReturnInst;
@@ -115,6 +114,15 @@ public:
       : Alias(Alias), HasOffset(false), Offset(0) {}
 
   operator Kind() const { return static_cast<Kind>(Alias); }
+
+  bool operator==(const AliasResult &Other) const {
+    return Alias == Other.Alias && HasOffset == Other.HasOffset &&
+           Offset == Other.Offset;
+  }
+  bool operator!=(const AliasResult &Other) const { return !(*this == Other); }
+
+  bool operator==(Kind K) const { return Alias == K; }
+  bool operator!=(Kind K) const { return !(*this == K); }
 
   constexpr bool hasOffset() const { return HasOffset; }
   constexpr int32_t getOffset() const {
@@ -261,6 +269,22 @@ public:
   /// Used to remove all potentially incorrect results from the cache if an
   /// assumption is disproven.
   SmallVector<AAQueryInfo::LocPair, 4> AssumptionBasedResults;
+
+  /// Tracks whether the accesses may be on different cycle iterations.
+  ///
+  /// When interpret "Value" pointer equality as value equality we need to make
+  /// sure that the "Value" is not part of a cycle. Otherwise, two uses could
+  /// come from different "iterations" of a cycle and see different values for
+  /// the same "Value" pointer.
+  ///
+  /// The following example shows the problem:
+  ///   %p = phi(%alloca1, %addr2)
+  ///   %l = load %ptr
+  ///   %addr1 = gep, %alloca2, 0, %l
+  ///   %addr2 = gep  %alloca2, 0, (%l + 1)
+  ///      alias(%p, %addr1) -> MayAlias !
+  ///   store %l, ...
+  bool MayBeCrossIteration = false;
 
   AAQueryInfo(AAResults &AAR, CaptureInfo *CI) : AAR(AAR), CI(CI) {}
 };
@@ -470,7 +494,7 @@ public:
   /// call-site mod-ref behavior queries. Otherwise it delegates to the specific
   /// helpers above.
   ModRefInfo getModRefInfo(const Instruction *I,
-                           const Optional<MemoryLocation> &OptLoc) {
+                           const std::optional<MemoryLocation> &OptLoc) {
     SimpleAAQueryInfo AAQIP(*this);
     return getModRefInfo(I, OptLoc, AAQIP);
   }
@@ -532,8 +556,11 @@ public:
     return canInstructionRangeModRef(I1, I2, MemoryLocation(Ptr, Size), Mode);
   }
 
+  // CtxI can be nullptr, in which case the query is whether or not the aliasing
+  // relationship holds through the entire function.
   AliasResult alias(const MemoryLocation &LocA, const MemoryLocation &LocB,
-                    AAQueryInfo &AAQI);
+                    AAQueryInfo &AAQI, const Instruction *CtxI = nullptr);
+
   bool pointsToConstantMemory(const MemoryLocation &Loc, AAQueryInfo &AAQI,
                               bool OrLocal = false);
   ModRefInfo getModRefInfoMask(const MemoryLocation &Loc, AAQueryInfo &AAQI,
@@ -561,7 +588,7 @@ public:
   ModRefInfo getModRefInfo(const CatchReturnInst *I, const MemoryLocation &Loc,
                            AAQueryInfo &AAQI);
   ModRefInfo getModRefInfo(const Instruction *I,
-                           const Optional<MemoryLocation> &OptLoc,
+                           const std::optional<MemoryLocation> &OptLoc,
                            AAQueryInfo &AAQIP);
   ModRefInfo callCapturesBefore(const Instruction *I,
                                 const MemoryLocation &MemLoc, DominatorTree *DT,
@@ -610,7 +637,7 @@ public:
     return AA.getModRefInfoMask(Loc, AAQI, IgnoreLocals);
   }
   ModRefInfo getModRefInfo(const Instruction *I,
-                           const Optional<MemoryLocation> &OptLoc) {
+                           const std::optional<MemoryLocation> &OptLoc) {
     return AA.getModRefInfo(I, OptLoc, AAQI);
   }
   ModRefInfo getModRefInfo(const Instruction *I, const CallBase *Call2) {
@@ -634,6 +661,11 @@ public:
                                 const MemoryLocation &MemLoc,
                                 DominatorTree *DT) {
     return AA.callCapturesBefore(I, MemLoc, DT, AAQI);
+  }
+
+  /// Assume that values may come from different cycle iterations.
+  void enableCrossIterationMode() {
+    AAQI.MayBeCrossIteration = true;
   }
 };
 
@@ -663,7 +695,8 @@ public:
   /// each other. This is the interface that must be implemented by specific
   /// alias analysis implementations.
   virtual AliasResult alias(const MemoryLocation &LocA,
-                            const MemoryLocation &LocB, AAQueryInfo &AAQI) = 0;
+                            const MemoryLocation &LocB, AAQueryInfo &AAQI,
+                            const Instruction *CtxI) = 0;
 
   /// @}
   //===--------------------------------------------------------------------===//
@@ -722,8 +755,8 @@ public:
   ~Model() override = default;
 
   AliasResult alias(const MemoryLocation &LocA, const MemoryLocation &LocB,
-                    AAQueryInfo &AAQI) override {
-    return Result.alias(LocA, LocB, AAQI);
+                    AAQueryInfo &AAQI, const Instruction *CtxI) override {
+    return Result.alias(LocA, LocB, AAQI, CtxI);
   }
 
   ModRefInfo getModRefInfoMask(const MemoryLocation &Loc, AAQueryInfo &AAQI,
@@ -777,7 +810,7 @@ protected:
 
 public:
   AliasResult alias(const MemoryLocation &LocA, const MemoryLocation &LocB,
-                    AAQueryInfo &AAQI) {
+                    AAQueryInfo &AAQI, const Instruction *I) {
     return AliasResult::MayAlias;
   }
 
@@ -839,6 +872,13 @@ bool isEscapeSource(const Value *V);
 /// captured prior to the unwind. Otherwise it is not visible even if captured.
 bool isNotVisibleOnUnwind(const Value *Object,
                           bool &RequiresNoCaptureBeforeUnwind);
+
+/// Return true if the Object is writable, in the sense that any location based
+/// on this pointer that can be loaded can also be stored to without trapping.
+///
+/// By itself, this does not imply that introducing spurious stores is safe,
+/// for example due to thread-safety reasons.
+bool isWritableObject(const Value *Object);
 
 /// A manager for alias analyses.
 ///
@@ -939,8 +979,6 @@ struct ExternalAAWrapperPass : ImmutablePass {
   }
 };
 
-FunctionPass *createAAResultsWrapperPass();
-
 /// A wrapper pass around a callback which can be used to populate the
 /// AAResults in the AAResultsWrapperPass from an external AA.
 ///
@@ -950,19 +988,6 @@ FunctionPass *createAAResultsWrapperPass();
 /// setting up a custom pass pipeline to inject a hook into the AA results.
 ImmutablePass *createExternalAAWrapperPass(
     std::function<void(Pass &, Function &, AAResults &)> Callback);
-
-/// A helper for the legacy pass manager to create a \c AAResults
-/// object populated to the best of our ability for a particular function when
-/// inside of a \c ModulePass or a \c CallGraphSCCPass.
-///
-/// If a \c ModulePass or a \c CallGraphSCCPass calls \p
-/// createLegacyPMAAResults, it also needs to call \p addUsedAAAnalyses in \p
-/// getAnalysisUsage.
-AAResults createLegacyPMAAResults(Pass &P, Function &F, BasicAAResult &BAR);
-
-/// A helper for the legacy pass manager to populate \p AU to add uses to make
-/// sure the analyses required by \p createLegacyPMAAResults are available.
-void getAAResultsAnalysisUsage(AnalysisUsage &AU);
 
 } // end namespace llvm
 

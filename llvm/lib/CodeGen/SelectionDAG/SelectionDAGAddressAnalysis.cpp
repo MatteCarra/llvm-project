@@ -85,9 +85,9 @@ bool BaseIndexOffset::equalBaseIndex(const BaseIndexOffset &Other,
 }
 
 bool BaseIndexOffset::computeAliasing(const SDNode *Op0,
-                                      const Optional<int64_t> NumBytes0,
+                                      const std::optional<int64_t> NumBytes0,
                                       const SDNode *Op1,
-                                      const Optional<int64_t> NumBytes1,
+                                      const std::optional<int64_t> NumBytes1,
                                       const SelectionDAG &DAG, bool &IsAlias) {
 
   BaseIndexOffset BasePtr0 = match(Op0, DAG);
@@ -130,7 +130,7 @@ bool BaseIndexOffset::computeAliasing(const SDNode *Op0,
       MachineFrameInfo &MFI = DAG.getMachineFunction().getFrameInfo();
       // If the base are the same frame index but the we couldn't find a
       // constant offset, (indices are different) be conservative.
-      if (A != B && (!MFI.isFixedObjectIndex(A->getIndex()) ||
+      if (A->getIndex() != B->getIndex() && (!MFI.isFixedObjectIndex(A->getIndex()) ||
                      !MFI.isFixedObjectIndex(B->getIndex()))) {
         IsAlias = false;
         return true;

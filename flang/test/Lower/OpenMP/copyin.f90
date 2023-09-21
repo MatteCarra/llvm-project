@@ -27,7 +27,7 @@
 ! CHECK:           }
 ! CHECK:           fir.array_merge_store %[[VAL_9]], %[[VAL_20:.*]] to %[[VAL_7]] : !fir.array<10xi64>, !fir.array<10xi64>, !fir.ref<!fir.array<10xi64>>
 ! CHECK:           omp.barrier
-! CHECK:           fir.call @_QPsub1(%[[VAL_5]], %[[VAL_7]]) : (!fir.ref<i32>, !fir.ref<!fir.array<10xi64>>) -> ()
+! CHECK:           fir.call @_QPsub1(%[[VAL_5]], %[[VAL_7]]) {{.*}}: (!fir.ref<i32>, !fir.ref<!fir.array<10xi64>>) -> ()
 ! CHECK:           omp.terminator
 ! CHECK:         }
 ! CHECK:         return
@@ -60,7 +60,7 @@ end
 ! CHECK:           %[[VAL_11:.*]] = arith.constant false
 ! CHECK:           %[[VAL_12:.*]] = fir.convert %[[VAL_7]] : (!fir.ref<!fir.char<1,5>>) -> !fir.ref<i8>
 ! CHECK:           %[[VAL_13:.*]] = fir.convert %[[VAL_2]] : (!fir.ref<!fir.char<1,5>>) -> !fir.ref<i8>
-! CHECK:           fir.call @llvm.memmove.p0.p0.i64(%[[VAL_12]], %[[VAL_13]], %[[VAL_10]], %[[VAL_11]]) : (!fir.ref<i8>, !fir.ref<i8>, i64, i1) -> ()
+! CHECK:           fir.call @llvm.memmove.p0.p0.i64(%[[VAL_12]], %[[VAL_13]], %[[VAL_10]], %[[VAL_11]]) {{.*}}: (!fir.ref<i8>, !fir.ref<i8>, i64, i1) -> ()
 ! CHECK:           %[[VAL_14:.*]] = omp.threadprivate %[[VAL_3]] : !fir.ref<!fir.array<10x!fir.char<1,5>>> -> !fir.ref<!fir.array<10x!fir.char<1,5>>>
 ! CHECK:           %[[VAL_15:.*]] = fir.shape %[[VAL_5]] : (index) -> !fir.shape<1>
 ! CHECK:           %[[VAL_16:.*]] = fir.array_load %[[VAL_14]](%[[VAL_15]]) : (!fir.ref<!fir.array<10x!fir.char<1,5>>>, !fir.shape<1>) -> !fir.array<10x!fir.char<1,5>>
@@ -79,7 +79,7 @@ end
 ! CHECK:             %[[VAL_31:.*]] = arith.constant false
 ! CHECK:             %[[VAL_32:.*]] = fir.convert %[[VAL_26]] : (!fir.ref<!fir.char<1,5>>) -> !fir.ref<i8>
 ! CHECK:             %[[VAL_33:.*]] = fir.convert %[[VAL_25]] : (!fir.ref<!fir.char<1,5>>) -> !fir.ref<i8>
-! CHECK:             fir.call @llvm.memmove.p0.p0.i64(%[[VAL_32]], %[[VAL_33]], %[[VAL_30]], %[[VAL_31]]) : (!fir.ref<i8>, !fir.ref<i8>, i64, i1) -> ()
+! CHECK:             fir.call @llvm.memmove.p0.p0.i64(%[[VAL_32]], %[[VAL_33]], %[[VAL_30]], %[[VAL_31]]) {{.*}}: (!fir.ref<i8>, !fir.ref<i8>, i64, i1) -> ()
 ! CHECK:             %[[VAL_34:.*]] = fir.array_amend %[[VAL_24]], %[[VAL_26]] : (!fir.array<10x!fir.char<1,5>>, !fir.ref<!fir.char<1,5>>) -> !fir.array<10x!fir.char<1,5>>
 ! CHECK:             fir.result %[[VAL_34]] : !fir.array<10x!fir.char<1,5>>
 ! CHECK:           }
@@ -89,7 +89,7 @@ end
 ! CHECK:           %[[VAL_37:.*]] = fir.emboxchar %[[VAL_36]], %[[VAL_1]] : (!fir.ref<!fir.char<1,?>>, index) -> !fir.boxchar<1>
 ! CHECK:           %[[VAL_38:.*]] = fir.convert %[[VAL_14]] : (!fir.ref<!fir.array<10x!fir.char<1,5>>>) -> !fir.ref<!fir.char<1,?>>
 ! CHECK:           %[[VAL_39:.*]] = fir.emboxchar %[[VAL_38]], %[[VAL_4]] : (!fir.ref<!fir.char<1,?>>, index) -> !fir.boxchar<1>
-! CHECK:           fir.call @_QPsub2(%[[VAL_37]], %[[VAL_39]]) : (!fir.boxchar<1>, !fir.boxchar<1>) -> ()
+! CHECK:           fir.call @_QPsub2(%[[VAL_37]], %[[VAL_39]]) {{.*}}: (!fir.boxchar<1>, !fir.boxchar<1>) -> ()
 ! CHECK:           omp.terminator
 ! CHECK:         }
 ! CHECK:         return
@@ -113,7 +113,7 @@ end
 ! CHECK:           %[[VAL_3:.*]] = fir.load %[[VAL_1]] : !fir.ref<!fir.type<_QFcopyin_derived_typeTmy_type{t_i:i32,t_arr:!fir.array<5xi32>}>>
 ! CHECK:           fir.store %[[VAL_3]] to %[[VAL_2]] : !fir.ref<!fir.type<_QFcopyin_derived_typeTmy_type{t_i:i32,t_arr:!fir.array<5xi32>}>>
 ! CHECK:           omp.barrier
-! CHECK:           fir.call @_QPsub3(%[[VAL_2]]) : (!fir.ref<!fir.type<_QFcopyin_derived_typeTmy_type{t_i:i32,t_arr:!fir.array<5xi32>}>>) -> ()
+! CHECK:           fir.call @_QPsub3(%[[VAL_2]]) {{.*}}: (!fir.ref<!fir.type<_QFcopyin_derived_typeTmy_type{t_i:i32,t_arr:!fir.array<5xi32>}>>) -> ()
 ! CHECK:           omp.terminator
 ! CHECK:         }
 ! CHECK:         return
@@ -148,7 +148,7 @@ end
 ! CHECK:           %[[VAL_8:.*]] = arith.constant 1 : i32
 ! CHECK:           omp.wsloop   for  (%[[VAL_9:.*]]) : i32 = (%[[VAL_6]]) to (%[[VAL_7]]) inclusive step (%[[VAL_8]]) {
 ! CHECK:             fir.store %[[VAL_9]] to %[[VAL_3]] : !fir.ref<i32>
-! CHECK:             fir.call @_QPsub4(%[[VAL_4]]) : (!fir.ref<i32>) -> ()
+! CHECK:             fir.call @_QPsub4(%[[VAL_4]]) {{.*}}: (!fir.ref<i32>) -> ()
 ! CHECK:             omp.yield
 ! CHECK:           }
 ! CHECK:           omp.terminator
@@ -178,11 +178,11 @@ end
 ! CHECK:           omp.barrier
 ! CHECK:           omp.sections   {
 ! CHECK:             omp.section {
-! CHECK:               fir.call @_QPsub5(%[[VAL_2]]) : (!fir.ref<i32>) -> ()
+! CHECK:               fir.call @_QPsub5(%[[VAL_2]]) {{.*}}: (!fir.ref<i32>) -> ()
 ! CHECK:               omp.terminator
 ! CHECK:             }
 ! CHECK:             omp.section {
-! CHECK:               fir.call @_QPsub6(%[[VAL_2]]) : (!fir.ref<i32>) -> ()
+! CHECK:               fir.call @_QPsub6(%[[VAL_2]]) {{.*}}: (!fir.ref<i32>) -> ()
 ! CHECK:               omp.terminator
 ! CHECK:             }
 ! CHECK:             omp.terminator
@@ -204,3 +204,110 @@ subroutine combined_parallel_sections()
   !$omp end parallel sections
 
 end
+
+
+!CHECK: func.func @_QPcommon_1() {
+!CHECK: %[[val_0:.*]] = fir.address_of(@_QCc) : !fir.ref<!fir.array<4xi8>>
+!CHECK: %[[val_1:.*]] = omp.threadprivate %[[val_0]] : !fir.ref<!fir.array<4xi8>> -> !fir.ref<!fir.array<4xi8>>
+!CHECK: %[[val_2:.*]] = fir.convert %[[val_1]] : (!fir.ref<!fir.array<4xi8>>) -> !fir.ref<!fir.array<?xi8>>
+!CHECK: %[[val_c0:.*]] = arith.constant 0 : index
+!CHECK: %[[val_3:.*]] = fir.coordinate_of %[[val_2]], %[[val_c0]] : (!fir.ref<!fir.array<?xi8>>, index) -> !fir.ref<i8>
+!CHECK: %[[val_4:.*]] = fir.convert %[[val_3]] : (!fir.ref<i8>) -> !fir.ref<i32>
+!CHECK: %[[val_5:.*]] = fir.alloca i32 {bindc_name = "y", uniq_name = "_QFcommon_1Ey"}
+!CHECK: omp.parallel {
+!CHECK: %[[val_6:.*]] = omp.threadprivate %[[val_0]] : !fir.ref<!fir.array<4xi8>> -> !fir.ref<!fir.array<4xi8>>
+!CHECK: %[[val_7:.*]] = fir.convert %[[val_6]] : (!fir.ref<!fir.array<4xi8>>) -> !fir.ref<!fir.array<?xi8>>
+!CHECK: %[[val_c0_0:.*]] = arith.constant 0 : index
+!CHECK: %[[val_8:.*]] = fir.coordinate_of %[[val_7]], %[[val_c0_0]] : (!fir.ref<!fir.array<?xi8>>, index) -> !fir.ref<i8>
+!CHECK: %[[val_9:.*]] = fir.convert %[[val_8]] : (!fir.ref<i8>) -> !fir.ref<i32>
+!CHECK: %[[val_10:.*]] = fir.load %[[val_4]] : !fir.ref<i32>
+!CHECK: fir.store %[[val_10]] to %[[val_9]] : !fir.ref<i32>
+!CHECK: omp.barrier
+!CHECK: omp.sections   {
+!CHECK: omp.section {
+!CHECK: %[[val_11:.*]] = fir.load %[[val_9]] : !fir.ref<i32>
+!CHECK: %[[val_c1_i32:.*]] = arith.constant 1 : i32
+!CHECK: %[[val_12:.*]] = arith.addi %[[val_11]], %[[val_c1_i32]] : i32
+!CHECK: fir.store %[[val_12]] to %[[val_5]] : !fir.ref<i32>
+!CHECK: omp.terminator
+!CHECK: }
+!CHECK: omp.section {
+!CHECK: %[[val_11:.*]] = fir.load %[[val_5]] : !fir.ref<i32>
+!CHECK: %[[val_12:.*]] = fir.load %[[val_5]] : !fir.ref<i32>
+!CHECK: %[[val_13:.*]] = arith.muli %[[val_11]], %[[val_12]] : i32
+!CHECK: fir.store %[[val_13]] to %[[val_9]] : !fir.ref<i32>
+!CHECK: omp.terminator
+!CHECK: }
+!CHECK: omp.terminator
+!CHECK: }
+!CHECK: return
+!CHECK: }
+subroutine common_1()
+  integer :: x
+  integer :: y
+  common /c/ x
+  !$omp threadprivate(/c/)
+
+  !$omp parallel sections copyin(/c/)
+      !$omp section
+        y = x + 1
+      !$omp section
+        x = y * y
+  !$omp end parallel sections
+end subroutine
+
+!CHECK: func.func @_QPcommon_2() {
+!CHECK: %[[val_0:.*]] = fir.alloca i32 {bindc_name = "i", uniq_name = "_QFcommon_2Ei"}
+!CHECK: %[[val_1:.*]] = fir.address_of(@_QCd) : !fir.ref<!fir.array<8xi8>>
+!CHECK: %[[val_2:.*]] = omp.threadprivate %[[val_1]] : !fir.ref<!fir.array<8xi8>> -> !fir.ref<!fir.array<8xi8>>
+!CHECK: %[[val_3:.*]] = fir.convert %[[val_2]] : (!fir.ref<!fir.array<8xi8>>) -> !fir.ref<!fir.array<?xi8>>
+!CHECK: %[[val_c0:.*]] = arith.constant 0 : index
+!CHECK: %[[val_4:.*]] = fir.coordinate_of %[[val_3]], %[[val_c0]] : (!fir.ref<!fir.array<?xi8>>, index) -> !fir.ref<i8>
+!CHECK: %[[val_5:.*]] = fir.convert %[[val_4]] : (!fir.ref<i8>) -> !fir.ref<i32>
+!CHECK: %[[val_6:.*]] = fir.convert %[[val_2]] : (!fir.ref<!fir.array<8xi8>>) -> !fir.ref<!fir.array<?xi8>>
+!CHECK: %[[val_c4:.*]] = arith.constant 4 : index
+!CHECK: %[[val_7:.*]] = fir.coordinate_of %[[val_6]], %[[val_c4]] : (!fir.ref<!fir.array<?xi8>>, index) -> !fir.ref<i8>
+!CHECK: %[[val_8:.*]] = fir.convert %[[val_7]] : (!fir.ref<i8>) -> !fir.ref<i32>
+!CHECK: omp.parallel {
+!CHECK: %[[val_9:.*]] = fir.alloca i32 {adapt.valuebyref, pinned}
+!CHECK: %[[val_10:.*]] = omp.threadprivate %[[val_1]] : !fir.ref<!fir.array<8xi8>> -> !fir.ref<!fir.array<8xi8>>
+!CHECK: %[[val_11:.*]] = fir.convert %[[val_10]] : (!fir.ref<!fir.array<8xi8>>) -> !fir.ref<!fir.array<?xi8>>
+!CHECK: %[[val_c0_0:.*]] = arith.constant 0 : index
+!CHECK: %[[val_12:.*]] = fir.coordinate_of %[[val_11]], %[[val_c0_0]] : (!fir.ref<!fir.array<?xi8>>, index) -> !fir.ref<i8>
+!CHECK: %[[val_13:.*]] = fir.convert %[[val_12]] : (!fir.ref<i8>) -> !fir.ref<i32>
+!CHECK: %[[val_14:.*]] = fir.convert %[[val_10]] : (!fir.ref<!fir.array<8xi8>>) -> !fir.ref<!fir.array<?xi8>>
+!CHECK: %[[val_c4_1:.*]] = arith.constant 4 : index
+!CHECK: %[[val_15:.*]] = fir.coordinate_of %[[val_14]], %[[val_c4_1]] : (!fir.ref<!fir.array<?xi8>>, index) -> !fir.ref<i8>
+!CHECK: %[[val_16:.*]] = fir.convert %[[val_15]] : (!fir.ref<i8>) -> !fir.ref<i32>
+!CHECK: %[[val_17:.*]] = fir.load %[[val_5]] : !fir.ref<i32>
+!CHECK: fir.store %[[val_17]] to %[[val_13]] : !fir.ref<i32>
+!CHECK: %[[val_18:.*]] = fir.load %[[val_8]] : !fir.ref<i32>
+!CHECK: fir.store %[[val_18]] to %[[val_16]] : !fir.ref<i32>
+!CHECK: omp.barrier
+!CHECK: %[[val_c1_i32:.*]] = arith.constant 1 : i32
+!CHECK: %[[val_19:.*]] = fir.load %[[val_13]] : !fir.ref<i32>
+!CHECK: %[[val_c1_i32_2:.*]] = arith.constant 1 : i32
+!CHECK: omp.wsloop   for (%[[arg:.*]]) : i32 = (%[[val_c1_i32]]) to (%[[val_19]]) inclusive step (%[[val_c1_i32_2]]) {
+!CHECK: fir.store %[[arg]] to %[[val_9]] : !fir.ref<i32>
+!CHECK: %[[val_20:.*]] = fir.load %[[val_16]] : !fir.ref<i32>
+!CHECK: %[[val_21:.*]] = fir.load %[[val_9]] : !fir.ref<i32>
+!CHECK: %[[val_22:.*]] = arith.addi %[[val_20]], %[[val_21]] : i32
+!CHECK: fir.store %[[val_22]] to %[[val_16]] : !fir.ref<i32>
+!CHECK: omp.yield
+!CHECK: }
+!CHECK: omp.terminator
+!CHECK: }
+!CHECK: return
+!CHECK: }
+subroutine common_2()
+  integer :: x
+  integer :: y
+  common /d/ x, y
+  !$omp threadprivate(/d/)
+  
+  !$omp parallel do copyin(/d/)
+     do i = 1, x
+        y = y + i
+     end do
+  !$omp end parallel do
+end subroutine

@@ -32,6 +32,7 @@
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Target/TargetLoweringObjectFile.h"
+#include <optional>
 
 using namespace llvm;
 
@@ -40,6 +41,8 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeDirectXTarget() {
   auto *PR = PassRegistry::getPassRegistry();
   initializeDXILPrepareModulePass(*PR);
   initializeEmbedDXILPassPass(*PR);
+  initializeWriteDXILPassPass(*PR);
+  initializeDXContainerGlobalsPass(*PR);
   initializeDXILOpLoweringLegacyPass(*PR);
   initializeDXILTranslateMetadataPass(*PR);
   initializeDXILResourceWrapperPass(*PR);
@@ -82,8 +85,8 @@ public:
 DirectXTargetMachine::DirectXTargetMachine(const Target &T, const Triple &TT,
                                            StringRef CPU, StringRef FS,
                                            const TargetOptions &Options,
-                                           Optional<Reloc::Model> RM,
-                                           Optional<CodeModel::Model> CM,
+                                           std::optional<Reloc::Model> RM,
+                                           std::optional<CodeModel::Model> CM,
                                            CodeGenOpt::Level OL, bool JIT)
     : LLVMTargetMachine(T,
                         "e-m:e-p:32:32-i1:32-i8:8-i16:16-i32:32-i64:64-f16:16-"
@@ -125,12 +128,6 @@ bool DirectXTargetMachine::addPassesToEmitFile(
   TargetPassConfig *PassConfig = createPassConfig(PM);
   PassConfig->addCodeGenPrepare();
 
-  if (TargetPassConfig::willCompleteCodeGenPipeline()) {
-    PM.add(createDXILEmbedderPass());
-    // We embed the other DXContainer globals after embedding DXIL so that the
-    // globals don't pollute the DXIL.
-    PM.add(createDXContainerGlobalsPass());
-  }
   switch (FileType) {
   case CGFT_AssemblyFile:
     PM.add(createDXILPrettyPrinterPass(Out));
@@ -138,6 +135,11 @@ bool DirectXTargetMachine::addPassesToEmitFile(
     break;
   case CGFT_ObjectFile:
     if (TargetPassConfig::willCompleteCodeGenPipeline()) {
+      PM.add(createDXILEmbedderPass());
+      // We embed the other DXContainer globals after embedding DXIL so that the
+      // globals don't pollute the DXIL.
+      PM.add(createDXContainerGlobalsPass());
+
       if (!MMIWP)
         MMIWP = new MachineModuleInfoWrapperPass(this);
       PM.add(MMIWP);

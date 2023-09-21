@@ -88,6 +88,49 @@ def BufferDeallocation : Pass<"buffer-deallocation", "func::FuncOp"> {
   let constructor = "mlir::bufferization::createBufferDeallocationPass()";
 }
 
+def BufferDeallocationSimplification :
+    Pass<"buffer-deallocation-simplification", "func::FuncOp"> {
+  let summary = "Optimizes `bufferization.dealloc` operation for more "
+                "efficient codegen";
+  let description = [{
+    This pass uses static alias analysis to reduce the number of alias checks
+    required at runtime. Such checks are sometimes necessary to make sure that
+    memrefs aren't deallocated before their last usage (use after free) or that
+    some memref isn't deallocated twice (double free).
+  }];
+
+  let constructor =
+    "mlir::bufferization::createBufferDeallocationSimplificationPass()";
+
+  let dependentDialects = [
+    "mlir::bufferization::BufferizationDialect", "mlir::arith::ArithDialect",
+    "mlir::memref::MemRefDialect"
+  ];
+}
+
+def LowerDeallocations : Pass<"bufferization-lower-deallocations"> {
+  let summary = "Lowers `bufferization.dealloc` operations to `memref.dealloc`"
+                "operations";
+  let description = [{
+    This pass lowers `bufferization.dealloc` operations to the `memref` dialect.
+    It can be applied to a `builtin.module` or operations implementing the
+    `FunctionOpInterface`. For the latter, only simple `dealloc` operations can
+    be lowered because the library function necessary for the fully generic
+    lowering cannot be inserted. In this case, an error will be emitted.
+    Next to `memref.dealloc` operations, it may also emit operations from the
+    `arith`, `scf`, and `func` dialects to build conditional deallocations and
+    library functions to avoid code-size blow-up.
+  }];
+
+  let constructor =
+    "mlir::bufferization::createLowerDeallocationsPass()";
+
+  let dependentDialects = [
+    "arith::ArithDialect", "memref::MemRefDialect", "scf::SCFDialect",
+    "func::FuncDialect"
+  ];
+}
+
 def BufferHoisting : Pass<"buffer-hoisting", "func::FuncOp"> {
   let summary = "Optimizes placement of allocation operations by moving them "
                 "into common dominators and out of nested regions";
@@ -297,6 +340,11 @@ def OneShotBufferize : Pass<"one-shot-bufferize", "ModuleOp"> {
            "core bufferization passes.">,
     ListOption<"dialectFilter", "dialect-filter", "std::string",
                "Restrict bufferization to ops from these dialects.">,
+    Option<"dumpAliasSets", "dump-alias-sets", "bool", /*default=*/"false",
+           "Test only: Annotate tensor IR with alias sets">,
+    ListOption<"noAnalysisFuncFilter", "no-analysis-func-filter", "std::string",
+               "Skip analysis of functions with these symbol names."
+               "Set copyBeforeWrite to true when bufferizing them.">,
     Option<"functionBoundaryTypeConversion",
            "function-boundary-type-conversion", "std::string",
            /*default=*/"\"infer-layout-map\"",
@@ -317,6 +365,17 @@ def OneShotBufferize : Pass<"one-shot-bufferize", "ModuleOp"> {
            "Controls layout maps for non-inferrable memref types.">,
   ];
   let constructor = "mlir::bufferization::createOneShotBufferizePass()";
+
+  let statistics = [
+    Statistic<"numBufferAlloc", "num-buffer-alloc",
+              "Number of buffer allocations">,
+    Statistic<"numBufferDealloc", "num-buffer-dealloc",
+              "Number of buffer deallocations">,
+    Statistic<"numTensorInPlace", "num-tensor-in-place",
+              "Number of in-place tensor OpOperands">,
+    Statistic<"numTensorOutOfPlace", "num-tensor-out-of-place",
+              "Number of out-of-place tensor OpOperands">,
+  ];
 }
 
 def PromoteBuffersToStack : Pass<"promote-buffers-to-stack", "func::FuncOp"> {
@@ -338,37 +397,6 @@ def PromoteBuffersToStack : Pass<"promote-buffers-to-stack", "func::FuncOp"> {
            /*default=*/"1",
            "Maximal memref rank to promote dynamic buffers.">,
   ];
-}
-
-def TensorCopyInsertion : Pass<"tensor-copy-insertion"> {
-  let summary = "Make all tensor IR inplaceable by inserting copies";
-  let description = [{
-    This pass runs One-Shot Analysis and inserts copies for all OpOperands that
-    were decided to bufferize out-of-place. After running this pass, a
-    bufferization can write to buffers directly (without making copies) and no
-    longer has to care about potential read-after-write conflicts.
-
-    Note: By default, all newly inserted tensor copies/allocs (i.e., newly
-    created `bufferization.alloc_tensor` ops) that do not escape block are
-    annotated with `escape = false`. If `create-allocs` is unset, all newly
-    inserted tensor copies/allocs are annotated with `escape = true`. In that
-    case, they are not getting deallocated when bufferizing the IR.
-  }];
-  let options = [
-    Option<"allowReturnAllocs", "allow-return-allocs", "bool",
-            /*default=*/"false",
-           "Allows returning/yielding new allocations from a block.">,
-    Option<"bufferizeFunctionBoundaries", "bufferize-function-boundaries",
-           "bool", /*default=*/"0",
-           "Bufferize function boundaries (experimental).">,
-    Option<"createDeallocs", "create-deallocs", "bool", /*default=*/"true",
-           "Specify if new allocations should be deallocated.">,
-    Option<"mustInferMemorySpace", "must-infer-memory-space", "bool",
-           /*default=*/"false",
-           "The memory space of an memref types must always be inferred. If "
-           "unset, a default memory space of 0 is used otherwise.">,
-  ];
-  let constructor = "mlir::bufferization::createTensorCopyInsertionPass()";
 }
 
 def EmptyTensorElimination : Pass<"eliminate-empty-tensors"> {

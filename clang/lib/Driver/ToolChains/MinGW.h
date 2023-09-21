@@ -65,7 +65,6 @@ public:
 
   bool HasNativeLLVMSupport() const override;
 
-  bool IsIntegratedAssemblerDefault() const override;
   UnwindTableLevel
   getDefaultUnwindTableLevel(const llvm::opt::ArgList &Args) const override;
   bool isPICDefault() const override;
@@ -111,9 +110,10 @@ private:
   clang::driver::toolchains::Generic_GCC::GCCVersion GccVer;
   std::string Ver;
   std::string SubdirName;
+  std::string TripleDirName;
   mutable std::unique_ptr<tools::gcc::Preprocessor> Preprocessor;
   mutable std::unique_ptr<tools::gcc::Compiler> Compiler;
-  void findGccLibDir();
+  void findGccLibDir(const llvm::Triple &LiteralTriple);
 
   bool NativeLLVMSupport;
 };

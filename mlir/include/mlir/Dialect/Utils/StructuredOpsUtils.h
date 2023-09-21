@@ -20,6 +20,7 @@
 #include "mlir/IR/AffineMap.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/Location.h"
+#include "mlir/IR/TypeRange.h"
 #include "mlir/Support/LLVM.h"
 
 // Pull in all enum type definitions and utility function declarations.
@@ -28,6 +29,7 @@
 namespace mlir {
 
 class OpBuilder;
+class RewriterBase;
 
 /// Tests whether the given maps describe a row major matmul. The test is
 /// permutation-invariant. Note that this only checks the affine maps from an
@@ -79,8 +81,8 @@ public:
     Red() : IteratorType(IteratorTypeT::reduction) {}
   };
 
-  StructuredGenerator(OpBuilder &builder, StructuredOpInterface op)
-      : builder(builder), ctx(op.getContext()), loc(op.getLoc()),
+  StructuredGenerator(RewriterBase &rewriter, StructuredOpInterface op)
+      : rewriter(rewriter), ctx(op.getContext()), loc(op.getLoc()),
         iterators(op.getIteratorTypesArray()), maps(op.getIndexingMapsArray()),
         op(op) {}
 
@@ -100,13 +102,35 @@ public:
   }
 
 protected:
-  OpBuilder &builder;
+  RewriterBase &rewriter;
   MLIRContext *ctx;
   Location loc;
   SmallVector<IteratorTypeT> iterators;
   SmallVector<AffineMap, 4> maps;
   Operation *op;
 };
+
+// Clone the current operation with the operands. This is used to abstract away
+// the optional underlying region creation.
+// Note: this is a true builder that notifies the OpBuilder listener.
+Operation *clone(OpBuilder &b, Operation *op, TypeRange newResultTypes,
+                 ValueRange newOperands);
+template <typename OpT>
+OpT clone(OpBuilder &b, OpT op, TypeRange newResultTypes,
+          ValueRange newOperands) {
+  return cast<OpT>(clone(b, op.getOperation(), newResultTypes, newOperands));
+}
+
+// Clone the current operation with the operands but leave the regions empty.
+// Note: this is a true builder that notifies the OpBuilder listener.
+Operation *cloneWithoutRegions(OpBuilder &b, Operation *op,
+                               TypeRange newResultTypes,
+                               ValueRange newOperands);
+
+// Get the list of attributes associated with the op, ignoring
+// those with the provided name.
+SmallVector<NamedAttribute>
+getPrunedAttributeList(Operation *op, ArrayRef<StringRef> elidedAttrs);
 
 } // namespace mlir
 

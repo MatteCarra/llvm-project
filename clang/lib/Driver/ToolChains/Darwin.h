@@ -28,7 +28,8 @@ namespace tools {
 
 namespace darwin {
 llvm::Triple::ArchType getArchTypeForMachOArchName(StringRef Str);
-void setTripleTypeForMachOArchName(llvm::Triple &T, StringRef Str);
+void setTripleTypeForMachOArchName(llvm::Triple &T, StringRef Str,
+                                   const llvm::opt::ArgList &Args);
 
 class LLVM_LIBRARY_VISIBILITY MachOTool : public Tool {
   virtual void anchor();
@@ -148,7 +149,7 @@ private:
   mutable std::unique_ptr<tools::darwin::VerifyDebug> VerifyDebug;
 
   /// The version of the linker known to be available in the tool chain.
-  mutable Optional<VersionTuple> LinkerVersion;
+  mutable std::optional<VersionTuple> LinkerVersion;
 
 public:
   MachO(const Driver &D, const llvm::Triple &Triple,
@@ -238,10 +239,6 @@ public:
     // expected to use /usr/include/Block.h.
     return true;
   }
-  bool IsIntegratedAssemblerDefault() const override {
-    // Default integrated assembler to on for Apple's MachO targets.
-    return true;
-  }
 
   bool IsMathErrnoDefault() const override { return false; }
 
@@ -318,10 +315,10 @@ public:
   mutable VersionTuple OSTargetVersion;
 
   /// The information about the darwin SDK that was used.
-  mutable Optional<DarwinSDKInfo> SDKInfo;
+  mutable std::optional<DarwinSDKInfo> SDKInfo;
 
   /// The target variant triple that was specified (if any).
-  mutable Optional<llvm::Triple> TargetVariantTriple;
+  mutable std::optional<llvm::Triple> TargetVariantTriple;
 
   CudaInstallationDetector CudaInstallation;
   RocmInstallationDetector RocmInstallation;

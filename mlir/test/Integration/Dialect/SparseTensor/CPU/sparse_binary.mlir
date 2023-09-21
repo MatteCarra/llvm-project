@@ -1,11 +1,37 @@
-// RUN: mlir-opt %s --sparse-compiler | \
-// RUN: mlir-cpu-runner \
-// RUN:  -e entry -entry-point-result=void  \
-// RUN:  -shared-libs=%mlir_lib_dir/libmlir_c_runner_utils%shlibext | \
-// RUN: FileCheck %s
+//--------------------------------------------------------------------------------------------------
+// WHEN CREATING A NEW TEST, PLEASE JUST COPY & PASTE WITHOUT EDITS.
+//
+// Set-up that's shared across all tests in this directory. In principle, this
+// config could be moved to lit.local.cfg. However, there are downstream users that
+//  do not use these LIT config files. Hence why this is kept inline.
+//
+// DEFINE: %{sparse_compiler_opts} = enable-runtime-library=true
+// DEFINE: %{sparse_compiler_opts_sve} = enable-arm-sve=true %{sparse_compiler_opts}
+// DEFINE: %{compile} = mlir-opt %s --sparse-compiler="%{sparse_compiler_opts}"
+// DEFINE: %{compile_sve} = mlir-opt %s --sparse-compiler="%{sparse_compiler_opts_sve}"
+// DEFINE: %{run_libs} = -shared-libs=%mlir_c_runner_utils,%mlir_runner_utils
+// DEFINE: %{run_opts} = -e entry -entry-point-result=void
+// DEFINE: %{run} = mlir-cpu-runner %{run_opts} %{run_libs}
+// DEFINE: %{run_sve} = %mcr_aarch64_cmd --march=aarch64 --mattr="+sve" %{run_opts} %{run_libs}
+//
+// DEFINE: %{env} =
+//--------------------------------------------------------------------------------------------------
 
-#SparseVector = #sparse_tensor.encoding<{dimLevelType = ["compressed"]}>
-#DCSR = #sparse_tensor.encoding<{dimLevelType = ["compressed", "compressed"]}>
+// RUN: %{compile} | %{run} | FileCheck %s
+//
+// Do the same run, but now with direct IR generation.
+// REDEFINE: %{sparse_compiler_opts} = enable-runtime-library=false enable-buffer-initialization=true
+// RUN: %{compile} | %{run} | FileCheck %s
+//
+// Do the same run, but now with direct IR generation and vectorization.
+// REDEFINE: %{sparse_compiler_opts} = enable-runtime-library=false enable-buffer-initialization=true vl=2 reassociate-fp-reductions=true enable-index-optimizations=true
+// RUN: %{compile} | %{run} | FileCheck %s
+//
+// Do the same run, but now with direct IR generation and VLA vectorization.
+// RUN: %if mlir_arm_sve_tests %{ %{compile_sve} | %{run_sve} | FileCheck %s %}
+
+#SparseVector = #sparse_tensor.encoding<{lvlTypes = ["compressed"]}>
+#DCSR = #sparse_tensor.encoding<{lvlTypes = ["compressed", "compressed"]}>
 
 //
 // Traits for tensor operations.
@@ -346,7 +372,7 @@ module {
   func.func @dump_vec(%arg0: tensor<?xf64, #SparseVector>) {
     // Dump the values array to verify only sparse contents are stored.
     %c0 = arith.constant 0 : index
-    %d0 = arith.constant -1.0 : f64
+    %d0 = arith.constant 0.0 : f64
     %0 = sparse_tensor.values %arg0 : tensor<?xf64, #SparseVector> to memref<?xf64>
     %1 = vector.transfer_read %0[%c0], %d0: memref<?xf64>, vector<16xf64>
     vector.print %1 : vector<16xf64>
@@ -360,7 +386,7 @@ module {
   func.func @dump_vec_i32(%arg0: tensor<?xi32, #SparseVector>) {
     // Dump the values array to verify only sparse contents are stored.
     %c0 = arith.constant 0 : index
-    %d0 = arith.constant -1 : i32
+    %d0 = arith.constant 0 : i32
     %0 = sparse_tensor.values %arg0 : tensor<?xi32, #SparseVector> to memref<?xi32>
     %1 = vector.transfer_read %0[%c0], %d0: memref<?xi32>, vector<24xi32>
     vector.print %1 : vector<24xi32>
@@ -382,7 +408,7 @@ module {
 
   func.func @dump_mat_4x4(%A: tensor<4x4xf64, #DCSR>) {
     %c0 = arith.constant 0 : index
-    %du = arith.constant -1.0 : f64
+    %du = arith.constant 0.0 : f64
 
     %c = sparse_tensor.convert %A : tensor<4x4xf64, #DCSR> to tensor<4x4xf64>
     %v = vector.transfer_read %c[%c0, %c0], %du: tensor<4x4xf64>, vector<4x4xf64>
@@ -397,7 +423,7 @@ module {
 
   func.func @dump_mat_4x4_i8(%A: tensor<4x4xi8, #DCSR>) {
     %c0 = arith.constant 0 : index
-    %du = arith.constant -1 : i8
+    %du = arith.constant 0 : i8
 
     %c = sparse_tensor.convert %A : tensor<4x4xi8, #DCSR> to tensor<4x4xi8>
     %v = vector.transfer_read %c[%c0, %c0], %du: tensor<4x4xi8>, vector<4x4xi8>
@@ -406,7 +432,7 @@ module {
     %1 = sparse_tensor.values %A : tensor<4x4xi8, #DCSR> to memref<?xi8>
     %2 = vector.transfer_read %1[%c0], %du: memref<?xi8>, vector<16xi8>
     vector.print %2 : vector<16xi8>
-  
+
     return
   }
 
@@ -494,31 +520,31 @@ module {
     //
     // Verify the results.
     //
-    // CHECK:      ( 1, 2, 3, 4, 5, 6, 7, 8, 9, -1, -1, -1, -1, -1, -1, -1 )
+    // CHECK:      ( 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0, 0, 0 )
     // CHECK-NEXT: ( 1, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 4, 0, 0, 5, 6, 0, 0, 0, 0, 0, 0, 7, 8, 0, 9 )
-    // CHECK-NEXT: ( 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, -1, -1, -1, -1, -1, -1 )
+    // CHECK-NEXT: ( 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 0, 0, 0, 0, 0, 0 )
     // CHECK-NEXT: ( 0, 11, 0, 12, 13, 0, 0, 0, 0, 0, 14, 0, 0, 0, 0, 0, 15, 0, 16, 0, 0, 17, 0, 0, 0, 0, 0, 0, 18, 19, 0, 20 )
-    // CHECK-NEXT: ( 1, 11, 2, 13, 14, 3, 15, 4, 16, 5, 6, 7, 8, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 )
+    // CHECK-NEXT: ( 1, 11, 2, 13, 14, 3, 15, 4, 16, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 )
     // CHECK-NEXT: ( 1, 11, 0, 2, 13, 0, 0, 0, 0, 0, 14, 3, 0, 0, 0, 0, 15, 4, 16, 0, 5, 6, 0, 0, 0, 0, 0, 0, 7, 8, 0, 9 )
-    // CHECK-NEXT: ( 0, 6, 3, 28, 0, 6, 56, 72, 9, -1, -1, -1, -1, -1, -1, -1 )
+    // CHECK-NEXT: ( 0, 6, 3, 28, 0, 6, 56, 72, 9, 0, 0, 0, 0, 0, 0, 0 )
     // CHECK-NEXT: ( 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 28, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 56, 72, 0, 9 )
-    // CHECK-NEXT: ( 1, 3, 4, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 )
+    // CHECK-NEXT: ( 1, 3, 4, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 )
     // CHECK-NEXT: ( 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 4, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 )
-    // CHECK-NEXT: ( 0, 3, 11, 17, 20, 21, 28, 29, 31, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 )
+    // CHECK-NEXT: ( 0, 3, 11, 17, 20, 21, 28, 29, 31, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 )
     // CHECK-NEXT: ( 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 11, 0, 0, 0, 0, 0, 17, 0, 0, 20, 21, 0, 0, 0, 0, 0, 0, 28, 29, 0, 31 )
     // CHECK-NEXT: ( ( 7, 0, 0, 0, 0, 0, 0, -5 ), ( -4, 0, 0, 0, 0, 0, -3, 0 ), ( 0, -2, 0, 0, 0, 0, 0, 7 ), ( 0, 0, 0, 0, 0, 0, 0, 0 ) )
     // CHECK-NEXT: ( ( 2, 0, 4, 1 ), ( 0, 2.5, 0, 0 ), ( 1, 5, 2, 4 ), ( 5, 4, 0, 0 ) )
-    // CHECK-NEXT:   ( 2, 4, 1, 2.5, 1, 5, 2, 4, 5, 4, -1, -1, -1, -1, -1, -1 )
+    // CHECK-NEXT:   ( 2, 4, 1, 2.5, 1, 5, 2, 4, 5, 4, 0, 0, 0, 0, 0, 0 )
     // CHECK-NEXT: ( ( 2, 0, 4, 1 ), ( 0, 2.5, 0, 0 ), ( 1, 5, 2, 4 ), ( 5, 4, 0, 0 ) )
-    // CHECK-NEXT:   ( 2, 4, 1, 2.5, 1, 5, 2, 4, 5, 4, -1, -1, -1, -1, -1, -1 )
+    // CHECK-NEXT:   ( 2, 4, 1, 2.5, 1, 5, 2, 4, 5, 4, 0, 0, 0, 0, 0, 0 )
     // CHECK-NEXT: ( ( 2, 0, 4, 1 ), ( 0, 2.5, 0, 0 ), ( -1, -5, 2, 4 ), ( 1, 4, 0, 0 ) )
-    // CHECK-NEXT:   ( 2, 4, 1, 2.5, -1, -5, 2, 4, 1, 4, -1, -1, -1, -1, -1, -1 )
+    // CHECK-NEXT:   ( 2, 4, 1, 2.5, -1, -5, 2, 4, 1, 4, 0, 0, 0, 0, 0, 0 )
     // CHECK-NEXT: ( ( 0, 0, 1, -1 ), ( 0, 1, 0, 0 ), ( -1, -2, -2, 2 ), ( 1, 2, 0, 0 ) )
-    // CHECK-NEXT:   ( 0, 1, -1, 1, -1, -2, -2, 2, 1, 2, -1, -1, -1, -1, -1, -1 )
+    // CHECK-NEXT:   ( 0, 1, -1, 1, -1, -2, -2, 2, 1, 2, 0, 0, 0, 0, 0, 0 )
     // CHECK-NEXT: ( ( 1, 0, 0, 0 ), ( 0, 0, 0, 0 ), ( 0, 0, 0, 0 ), ( 0, 0, 0, 0 ) )
-    // CHECK-NEXT:   ( 1, 0, 0, 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 )
+    // CHECK-NEXT:   ( 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 )
     // CHECK-NEXT: ( ( 0, 0, 0, -1 ), ( 0, 0, 0, 0 ), ( -1, -5, -2, 4 ), ( 0, 4, 0, 0 ) )
-    // CHECK-NEXT:   ( -1, -1, -5, -2, 4, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 )
+    // CHECK-NEXT:   ( -1, -1, -5, -2, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 )
     //
     call @dump_vec(%sv1) : (tensor<?xf64, #SparseVector>) -> ()
     call @dump_vec(%sv2) : (tensor<?xf64, #SparseVector>) -> ()

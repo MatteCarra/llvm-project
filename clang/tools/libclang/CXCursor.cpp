@@ -643,6 +643,10 @@ CXCursor cxcursor::MakeCXCursor(const Stmt *S, const Decl *Parent,
     K = CXCursor_RequiresExpr;
     break;
 
+  case Stmt::CXXParenListInitExprClass:
+    K = CXCursor_CXXParenListInitExpr;
+    break;
+
   case Stmt::MSDependentExistsStmtClass:
     K = CXCursor_UnexposedStmt;
     break;
@@ -675,6 +679,9 @@ CXCursor cxcursor::MakeCXCursor(const Stmt *S, const Decl *Parent,
     break;
   case Stmt::OMPSectionDirectiveClass:
     K = CXCursor_OMPSectionDirective;
+    break;
+  case Stmt::OMPScopeDirectiveClass:
+    K = CXCursor_OMPScopeDirective;
     break;
   case Stmt::OMPSingleDirectiveClass:
     K = CXCursor_OMPSingleDirective;

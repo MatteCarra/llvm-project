@@ -268,7 +268,7 @@ X test1(bool B) {
 // CHECK-EH-03:       eh.resume:
 // CHECK-EH-03-NEXT:    [[EXN:%.*]] = load ptr, ptr [[EXN_SLOT]], align 4
 // CHECK-EH-03-NEXT:    [[SEL:%.*]] = load i32, ptr [[EHSELECTOR_SLOT]], align 4
-// CHECK-EH-03-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } undef, ptr [[EXN]], 0
+// CHECK-EH-03-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } poison, ptr [[EXN]], 0
 // CHECK-EH-03-NEXT:    [[LPAD_VAL8:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL]], 1
 // CHECK-EH-03-NEXT:    resume { ptr, i32 } [[LPAD_VAL8]]
 // CHECK-EH-03:       terminate.lpad:
@@ -336,7 +336,7 @@ X test1(bool B) {
 // CHECK-EH-11:       eh.resume:
 // CHECK-EH-11-NEXT:    [[EXN:%.*]] = load ptr, ptr [[EXN_SLOT]], align 4
 // CHECK-EH-11-NEXT:    [[SEL:%.*]] = load i32, ptr [[EHSELECTOR_SLOT]], align 4
-// CHECK-EH-11-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } undef, ptr [[EXN]], 0
+// CHECK-EH-11-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } poison, ptr [[EXN]], 0
 // CHECK-EH-11-NEXT:    [[LPAD_VAL5:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL]], 1
 // CHECK-EH-11-NEXT:    resume { ptr, i32 } [[LPAD_VAL5]]
 //
@@ -676,7 +676,7 @@ void may_throw();
 // CHECK-EH-03:       eh.resume:
 // CHECK-EH-03-NEXT:    [[EXN8:%.*]] = load ptr, ptr [[EXN_SLOT]], align 4
 // CHECK-EH-03-NEXT:    [[SEL9:%.*]] = load i32, ptr [[EHSELECTOR_SLOT]], align 4
-// CHECK-EH-03-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } undef, ptr [[EXN8]], 0
+// CHECK-EH-03-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } poison, ptr [[EXN8]], 0
 // CHECK-EH-03-NEXT:    [[LPAD_VAL10:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL9]], 1
 // CHECK-EH-03-NEXT:    resume { ptr, i32 } [[LPAD_VAL10]]
 // CHECK-EH-03:       terminate.lpad:
@@ -741,7 +741,7 @@ void may_throw();
 // CHECK-EH-11:       eh.resume:
 // CHECK-EH-11-NEXT:    [[EXN5:%.*]] = load ptr, ptr [[EXN_SLOT]], align 4
 // CHECK-EH-11-NEXT:    [[SEL6:%.*]] = load i32, ptr [[EHSELECTOR_SLOT]], align 4
-// CHECK-EH-11-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } undef, ptr [[EXN5]], 0
+// CHECK-EH-11-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } poison, ptr [[EXN5]], 0
 // CHECK-EH-11-NEXT:    [[LPAD_VAL7:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL6]], 1
 // CHECK-EH-11-NEXT:    resume { ptr, i32 } [[LPAD_VAL7]]
 // CHECK-EH-11:       terminate.lpad:
@@ -760,7 +760,6 @@ X test5() { // http://wg21.link/p2025r2#ex-14
 }
 #endif
 
-// rdar://problem/10430868
 // CHECK-LABEL: @_Z5test6v(
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[RESULT_PTR:%.*]] = alloca ptr, align 4
@@ -798,7 +797,7 @@ X test5() { // http://wg21.link/p2025r2#ex-14
 // CHECK-EH-03:       eh.resume:
 // CHECK-EH-03-NEXT:    [[EXN:%.*]] = load ptr, ptr [[EXN_SLOT]], align 4
 // CHECK-EH-03-NEXT:    [[SEL:%.*]] = load i32, ptr [[EHSELECTOR_SLOT]], align 4
-// CHECK-EH-03-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } undef, ptr [[EXN]], 0
+// CHECK-EH-03-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } poison, ptr [[EXN]], 0
 // CHECK-EH-03-NEXT:    [[LPAD_VAL2:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL]], 1
 // CHECK-EH-03-NEXT:    resume { ptr, i32 } [[LPAD_VAL2]]
 // CHECK-EH-03:       terminate.lpad:
@@ -833,7 +832,7 @@ X test5() { // http://wg21.link/p2025r2#ex-14
 // CHECK-EH-11:       eh.resume:
 // CHECK-EH-11-NEXT:    [[EXN:%.*]] = load ptr, ptr [[EXN_SLOT]], align 4
 // CHECK-EH-11-NEXT:    [[SEL:%.*]] = load i32, ptr [[EHSELECTOR_SLOT]], align 4
-// CHECK-EH-11-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } undef, ptr [[EXN]], 0
+// CHECK-EH-11-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } poison, ptr [[EXN]], 0
 // CHECK-EH-11-NEXT:    [[LPAD_VAL1:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL]], 1
 // CHECK-EH-11-NEXT:    resume { ptr, i32 } [[LPAD_VAL1]]
 //
@@ -1155,7 +1154,7 @@ Y<int> test9() {
 // CHECK-EH-03:       eh.resume:
 // CHECK-EH-03-NEXT:    [[EXN:%.*]] = load ptr, ptr [[EXN_SLOT]], align 4
 // CHECK-EH-03-NEXT:    [[SEL:%.*]] = load i32, ptr [[EHSELECTOR_SLOT]], align 4
-// CHECK-EH-03-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } undef, ptr [[EXN]], 0
+// CHECK-EH-03-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } poison, ptr [[EXN]], 0
 // CHECK-EH-03-NEXT:    [[LPAD_VAL3:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL]], 1
 // CHECK-EH-03-NEXT:    resume { ptr, i32 } [[LPAD_VAL3]]
 // CHECK-EH-03:       terminate.lpad:
@@ -1207,7 +1206,7 @@ Y<int> test9() {
 // CHECK-EH-11:       eh.resume:
 // CHECK-EH-11-NEXT:    [[EXN:%.*]] = load ptr, ptr [[EXN_SLOT]], align 4
 // CHECK-EH-11-NEXT:    [[SEL:%.*]] = load i32, ptr [[EHSELECTOR_SLOT]], align 4
-// CHECK-EH-11-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } undef, ptr [[EXN]], 0
+// CHECK-EH-11-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } poison, ptr [[EXN]], 0
 // CHECK-EH-11-NEXT:    [[LPAD_VAL2:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL]], 1
 // CHECK-EH-11-NEXT:    resume { ptr, i32 } [[LPAD_VAL2]]
 //
@@ -1288,7 +1287,7 @@ X test10(bool b) { // http://wg21.link/p2025r2#ex-3
 // CHECK-EH-03:       eh.resume:
 // CHECK-EH-03-NEXT:    [[EXN:%.*]] = load ptr, ptr [[EXN_SLOT]], align 4
 // CHECK-EH-03-NEXT:    [[SEL:%.*]] = load i32, ptr [[EHSELECTOR_SLOT]], align 4
-// CHECK-EH-03-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } undef, ptr [[EXN]], 0
+// CHECK-EH-03-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } poison, ptr [[EXN]], 0
 // CHECK-EH-03-NEXT:    [[LPAD_VAL3:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL]], 1
 // CHECK-EH-03-NEXT:    resume { ptr, i32 } [[LPAD_VAL3]]
 // CHECK-EH-03:       terminate.lpad:
@@ -1340,7 +1339,7 @@ X test10(bool b) { // http://wg21.link/p2025r2#ex-3
 // CHECK-EH-11:       eh.resume:
 // CHECK-EH-11-NEXT:    [[EXN:%.*]] = load ptr, ptr [[EXN_SLOT]], align 4
 // CHECK-EH-11-NEXT:    [[SEL:%.*]] = load i32, ptr [[EHSELECTOR_SLOT]], align 4
-// CHECK-EH-11-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } undef, ptr [[EXN]], 0
+// CHECK-EH-11-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } poison, ptr [[EXN]], 0
 // CHECK-EH-11-NEXT:    [[LPAD_VAL2:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL]], 1
 // CHECK-EH-11-NEXT:    resume { ptr, i32 } [[LPAD_VAL2]]
 //
@@ -1670,7 +1669,7 @@ X test13(bool b) { // http://wg21.link/p2025r2#ex-7
 // CHECK-EH-03:       eh.resume:
 // CHECK-EH-03-NEXT:    [[EXN:%.*]] = load ptr, ptr [[EXN_SLOT]], align 4
 // CHECK-EH-03-NEXT:    [[SEL:%.*]] = load i32, ptr [[EHSELECTOR_SLOT]], align 4
-// CHECK-EH-03-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } undef, ptr [[EXN]], 0
+// CHECK-EH-03-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } poison, ptr [[EXN]], 0
 // CHECK-EH-03-NEXT:    [[LPAD_VAL4:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL]], 1
 // CHECK-EH-03-NEXT:    resume { ptr, i32 } [[LPAD_VAL4]]
 // CHECK-EH-03:       terminate.lpad:
@@ -1731,7 +1730,7 @@ X test13(bool b) { // http://wg21.link/p2025r2#ex-7
 // CHECK-EH-11:       eh.resume:
 // CHECK-EH-11-NEXT:    [[EXN:%.*]] = load ptr, ptr [[EXN_SLOT]], align 4
 // CHECK-EH-11-NEXT:    [[SEL:%.*]] = load i32, ptr [[EHSELECTOR_SLOT]], align 4
-// CHECK-EH-11-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } undef, ptr [[EXN]], 0
+// CHECK-EH-11-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } poison, ptr [[EXN]], 0
 // CHECK-EH-11-NEXT:    [[LPAD_VAL2:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL]], 1
 // CHECK-EH-11-NEXT:    resume { ptr, i32 } [[LPAD_VAL2]]
 //
@@ -1832,7 +1831,7 @@ X test14(bool b) { // http://wg21.link/p2025r2#ex-8
 // CHECK-EH-03:       eh.resume:
 // CHECK-EH-03-NEXT:    [[EXN:%.*]] = load ptr, ptr [[EXN_SLOT]], align 4
 // CHECK-EH-03-NEXT:    [[SEL:%.*]] = load i32, ptr [[EHSELECTOR_SLOT]], align 4
-// CHECK-EH-03-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } undef, ptr [[EXN]], 0
+// CHECK-EH-03-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } poison, ptr [[EXN]], 0
 // CHECK-EH-03-NEXT:    [[LPAD_VAL4:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL]], 1
 // CHECK-EH-03-NEXT:    resume { ptr, i32 } [[LPAD_VAL4]]
 // CHECK-EH-03:       terminate.lpad:
@@ -1893,7 +1892,7 @@ X test14(bool b) { // http://wg21.link/p2025r2#ex-8
 // CHECK-EH-11:       eh.resume:
 // CHECK-EH-11-NEXT:    [[EXN:%.*]] = load ptr, ptr [[EXN_SLOT]], align 4
 // CHECK-EH-11-NEXT:    [[SEL:%.*]] = load i32, ptr [[EHSELECTOR_SLOT]], align 4
-// CHECK-EH-11-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } undef, ptr [[EXN]], 0
+// CHECK-EH-11-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } poison, ptr [[EXN]], 0
 // CHECK-EH-11-NEXT:    [[LPAD_VAL2:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL]], 1
 // CHECK-EH-11-NEXT:    resume { ptr, i32 } [[LPAD_VAL2]]
 //
@@ -1948,7 +1947,7 @@ X test15(bool b) { // http://wg21.link/p2025r2#ex-15
 // CHECK-EH-11:       eh.resume:
 // CHECK-EH-11-NEXT:    [[EXN:%.*]] = load ptr, ptr [[EXN_SLOT]], align 4
 // CHECK-EH-11-NEXT:    [[SEL:%.*]] = load i32, ptr [[EHSELECTOR_SLOT]], align 4
-// CHECK-EH-11-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } undef, ptr [[EXN]], 0
+// CHECK-EH-11-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } poison, ptr [[EXN]], 0
 // CHECK-EH-11-NEXT:    [[LPAD_VAL3:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL]], 1
 // CHECK-EH-11-NEXT:    resume { ptr, i32 } [[LPAD_VAL3]]
 //
@@ -2555,7 +2554,7 @@ X test18(int i) { // http://wg21.link/p2025r2#ex-11
 // CHECK-EH-11:       eh.resume:
 // CHECK-EH-11-NEXT:    [[EXN:%.*]] = load ptr, ptr [[EXN_SLOT]], align 4
 // CHECK-EH-11-NEXT:    [[SEL:%.*]] = load i32, ptr [[EHSELECTOR_SLOT]], align 4
-// CHECK-EH-11-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } undef, ptr [[EXN]], 0
+// CHECK-EH-11-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } poison, ptr [[EXN]], 0
 // CHECK-EH-11-NEXT:    [[LPAD_VAL1:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL]], 1
 // CHECK-EH-11-NEXT:    resume { ptr, i32 } [[LPAD_VAL1]]
 //
@@ -2687,7 +2686,7 @@ const volatile X test21() { // http://wg21.link/p2025r2#ex-19
 // CHECK-EH-03:       eh.resume:
 // CHECK-EH-03-NEXT:    [[EXN:%.*]] = load ptr, ptr [[EXN_SLOT]], align 4
 // CHECK-EH-03-NEXT:    [[SEL:%.*]] = load i32, ptr [[EHSELECTOR_SLOT]], align 4
-// CHECK-EH-03-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } undef, ptr [[EXN]], 0
+// CHECK-EH-03-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } poison, ptr [[EXN]], 0
 // CHECK-EH-03-NEXT:    [[LPAD_VAL2:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL]], 1
 // CHECK-EH-03-NEXT:    resume { ptr, i32 } [[LPAD_VAL2]]
 // CHECK-EH-03:       terminate.lpad:
@@ -2722,7 +2721,7 @@ const volatile X test21() { // http://wg21.link/p2025r2#ex-19
 // CHECK-EH-11:       eh.resume:
 // CHECK-EH-11-NEXT:    [[EXN:%.*]] = load ptr, ptr [[EXN_SLOT]], align 4
 // CHECK-EH-11-NEXT:    [[SEL:%.*]] = load i32, ptr [[EHSELECTOR_SLOT]], align 4
-// CHECK-EH-11-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } undef, ptr [[EXN]], 0
+// CHECK-EH-11-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } poison, ptr [[EXN]], 0
 // CHECK-EH-11-NEXT:    [[LPAD_VAL1:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL]], 1
 // CHECK-EH-11-NEXT:    resume { ptr, i32 } [[LPAD_VAL1]]
 //
@@ -2810,7 +2809,7 @@ X test22() { // http://wg21.link/p2025r2#ex-19
 // CHECK-EH-03:       eh.resume:
 // CHECK-EH-03-NEXT:    [[EXN:%.*]] = load ptr, ptr [[EXN_SLOT]], align 4
 // CHECK-EH-03-NEXT:    [[SEL:%.*]] = load i32, ptr [[EHSELECTOR_SLOT]], align 4
-// CHECK-EH-03-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } undef, ptr [[EXN]], 0
+// CHECK-EH-03-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } poison, ptr [[EXN]], 0
 // CHECK-EH-03-NEXT:    [[LPAD_VAL2:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL]], 1
 // CHECK-EH-03-NEXT:    resume { ptr, i32 } [[LPAD_VAL2]]
 // CHECK-EH-03:       terminate.lpad:
@@ -2866,7 +2865,7 @@ X test22() { // http://wg21.link/p2025r2#ex-19
 // CHECK-EH-11:       eh.resume:
 // CHECK-EH-11-NEXT:    [[EXN:%.*]] = load ptr, ptr [[EXN_SLOT]], align 4
 // CHECK-EH-11-NEXT:    [[SEL:%.*]] = load i32, ptr [[EHSELECTOR_SLOT]], align 4
-// CHECK-EH-11-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } undef, ptr [[EXN]], 0
+// CHECK-EH-11-NEXT:    [[LPAD_VAL:%.*]] = insertvalue { ptr, i32 } poison, ptr [[EXN]], 0
 // CHECK-EH-11-NEXT:    [[LPAD_VAL1:%.*]] = insertvalue { ptr, i32 } [[LPAD_VAL]], i32 [[SEL]], 1
 // CHECK-EH-11-NEXT:    resume { ptr, i32 } [[LPAD_VAL1]]
 //

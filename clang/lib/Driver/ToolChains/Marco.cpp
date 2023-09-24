@@ -71,10 +71,6 @@ void Marco::ConstructJob(Compilation &C, const JobAction &JA,
                          const InputInfo &Output, const InputInfoList &Inputs,
                          const ArgList &Args, const char *LinkingOutput) const {
   const auto &TC = getToolChain();
-  const llvm::Triple &Triple = TC.getEffectiveTriple();
-  const std::string &TripleStr = Triple.getTriple();
-
-  std::cout << "Job " << TripleStr << std::endl;
 
   const Driver &D = TC.getDriver();
   ArgStringList CmdArgs;
@@ -153,14 +149,9 @@ void Marco::ConstructJob(Compilation &C, const JobAction &JA,
     assert(Output.isNothing() && "Invalid output.");
   }
 
-  const InputInfo &Input = Inputs[0];
-  assert(Input.isFilename() && "Invalid input.");
-
   for(auto& input : Inputs) {
-    std::cout << "Input " << input.getFilename() << "." << std::endl;
+    CmdArgs.push_back(input.getFilename());
   }
-
-  CmdArgs.push_back(Input.getFilename());
 
   const char *Exec = Args.MakeArgString(D.GetProgramPath("marco", TC));
   C.addCommand(std::make_unique<Command>(JA, *this,

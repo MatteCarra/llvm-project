@@ -476,6 +476,8 @@ class CompileJobAction : public JobAction {
 public:
   CompileJobAction(Action *Input, types::ID OutputType);
 
+  CompileJobAction(const ActionList &Inputs, types::ID OutputType);
+
   static bool classof(const Action *A) {
     return A->getKind() == CompileJobClass;
   }

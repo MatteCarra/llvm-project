@@ -377,6 +377,9 @@ void CompileJobAction::anchor() {}
 CompileJobAction::CompileJobAction(Action *Input, types::ID OutputType)
     : JobAction(CompileJobClass, Input, OutputType) {}
 
+CompileJobAction::CompileJobAction(const ActionList &Inputs, types::ID OutputType)
+    : JobAction(CompileJobClass, Inputs, OutputType) {}
+
 void BackendJobAction::anchor() {}
 
 BackendJobAction::BackendJobAction(Action *Input, types::ID OutputType)

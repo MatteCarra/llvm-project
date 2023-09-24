@@ -6,6 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include <cstdint>
 #include <iostream>
 #include "clang/Driver/Driver.h"
 #include "ToolChains/AIX.h"
@@ -64,8 +65,10 @@
 #include "clang/Driver/Tool.h"
 #include "clang/Driver/ToolChain.h"
 #include "clang/Driver/Types.h"
+#include "clang/Driver/Util.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSet.h"
@@ -4034,6 +4037,60 @@ void Driver::handleArguments(Compilation &C, DerivedArgList &Args,
   }
 }
 
+void Driver::BuildMarcoActions(Compilation& C, DerivedArgList& Args, const InputList &Inputs, ActionList &Actions, ActionList& LinkerInputs) const {
+  ActionList ModelicaMergerInputs;
+
+  for (auto &I : Inputs) {
+    types::ID InputType = I.first;
+    const Arg *InputArg = I.second;
+
+    if(InputType != types::TY_Modelica) continue;
+    
+    // Build the pipeline for this file.
+    Action *Current = C.MakeAction<InputAction>(*InputArg, InputType);
+    
+    if(InputType == types::TY_Modelica) {
+      ModelicaMergerInputs.push_back(Current);
+    }
+  }
+
+  if(!ModelicaMergerInputs.empty()) {
+    auto PL = types::getCompilationPhases(*this, Args, types::TY_Modelica);
+
+    Action* Current = C.MakeAction<CompileJobAction>(ModelicaMergerInputs, types::TY_LLVM_BC);
+
+    for (size_t i = 1; i < PL.size(); i++) {
+      auto Phase = PL[i];
+
+      if (Phase == phases::Link) {
+        assert(Phase == PL.back() && "linking must be final compilation step.");
+        // We don't need to generate additional link commands if emitting AMD
+        // bitcode or compiling only for the offload device
+        if (!(C.getInputArgs().hasArg(options::OPT_hip_link) &&
+              (C.getInputArgs().hasArg(options::OPT_emit_llvm))) &&
+            !offloadDeviceOnly())
+          LinkerInputs.push_back(Current);
+        Current = nullptr;
+        break;
+      }
+
+      Action *NewCurrent = ConstructPhaseAction(C, Args, Phase, Current);
+
+      // We didn't create a new action, so we will just move to the next phase.
+      if (NewCurrent == Current)
+        continue;
+
+      Current = NewCurrent;
+
+      if (Current->getType() == types::TY_Nothing)
+        break;
+    }
+
+    if (Current)
+      Actions.push_back(Current);
+  }
+}
+
 void Driver::BuildActions(Compilation &C, DerivedArgList &Args,
                           const InputList &Inputs, ActionList &Actions) const {
   llvm::PrettyStackTraceString CrashInfo("Building compilation actions");
@@ -4097,6 +4154,8 @@ void Driver::BuildActions(Compilation &C, DerivedArgList &Args,
   for (auto &I : Inputs) {
     types::ID InputType = I.first;
     const Arg *InputArg = I.second;
+
+    if(InputType == types::TY_Modelica) continue;
 
     auto PL = types::getCompilationPhases(*this, Args, InputType);
     if (PL.empty())
@@ -4192,6 +4251,8 @@ void Driver::BuildActions(Compilation &C, DerivedArgList &Args,
       Current->propagateHostOffloadInfo(C.getActiveOffloadKinds(),
                                         /*BoundArch=*/nullptr);
   }
+
+  BuildMarcoActions(C, Args, Inputs, Actions, LinkerInputs);
 
   // Add a link action if necessary.
 
@@ -6419,13 +6480,13 @@ bool Driver::ShouldUseFlangCompiler(const JobAction &JA) const {
 
 bool Driver::ShouldUseMarcoCompiler(const JobAction &JA) const {
   // Say "no" if there is not exactly one input of a type flang understands.
-  if (JA.size() != 1 ||
-      !types::isAcceptedByMarco((*JA.input_begin())->getType()))
-    return false;
+  for(auto& input : JA.getInputs()) {
+    if (!types::isAcceptedByMarco(input->getType()))
+      return false;
+  }
 
   // And say "no" if this is not a kind of action marco understands.
-  //TODO
-  if (!isa<PreprocessJobAction>(JA) && !isa<CompileJobAction>(JA) && !isa<BackendJobAction>(JA))
+  if (!isa<CompileJobAction>(JA) && !isa<BackendJobAction>(JA))
     return false;
 
   return true;

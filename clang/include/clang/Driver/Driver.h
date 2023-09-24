@@ -471,6 +471,8 @@ public:
   void BuildInputs(const ToolChain &TC, llvm::opt::DerivedArgList &Args,
                    InputList &Inputs) const;
 
+  void BuildMarcoActions(Compilation& C, llvm::opt::DerivedArgList& Args, const InputList &Inputs, ActionList &Actions, ActionList& LinkerInputs) const;
+
   /// BuildActions - Construct the list of actions to perform for the
   /// given arguments, which are only done for a single architecture.
   ///

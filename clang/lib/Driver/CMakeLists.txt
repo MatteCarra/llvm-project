@@ -14,6 +14,11 @@ if(WIN32)
   set(system_libs version)
 endif()
 
+add_compile_definitions(
+    MARCO_LIBS_PATH=${MARCORuntime_LIBS_PATH}
+    MARCO_DEPENDENCIES_LIBS_PATH=${MARCORuntime_DEPENDENCIES_LIB_PATHS}
+    MARCO_LINK_EXTRA_FLAGS=${MARCORuntime_EXTRA_LINK_ARGS})
+
 add_clang_library(clangDriver
   Action.cpp
   Compilation.cpp

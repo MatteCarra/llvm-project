@@ -64,7 +64,16 @@
 #include "llvm/Support/YAMLParser.h"
 #include "llvm/TargetParser/Host.h"
 #include "llvm/TargetParser/TargetParser.h"
+#include <cstring>
+#include <iostream>
 #include <optional>
+
+#define VALUE(string) #string
+#define TO_LITERAL(string) VALUE(string)
+
+#define MARCO_LIBS_PATH_STR TO_LITERAL(MARCO_LIBS_PATH)
+#define MARCO_DEPENDENCIES_LIBS_PATH_STR TO_LITERAL(MARCO_DEPENDENCIES_LIBS_PATH)
+#define MARCO_LINK_EXTRA_FLAGS_STR TO_LITERAL(MARCO_LINK_EXTRA_FLAGS)
 
 using namespace clang::driver;
 using namespace clang::driver::tools;
@@ -974,17 +983,33 @@ void tools::addFortranRuntimeLibraryPath(const ToolChain &TC,
     CmdArgs.push_back(Args.MakeArgString("-L" + DefaultLibPath));
 }
 
+static void collectLibraryPaths(
+    llvm::StringRef pathsStr,
+    llvm::SmallVectorImpl<std::string>& paths)
+{
+  llvm::SmallVector<llvm::StringRef> refs;
+  pathsStr.split(refs, ';', -1, false);
+
+  for (llvm::StringRef ref : refs) {
+    paths.push_back(ref.str());
+  }
+}
+
 void tools::addMarcoLinkerArgs(const ToolChain &TC,
                                   const llvm::opt::ArgList &Args,
                                   llvm::opt::ArgStringList &CmdArgs) {
   auto solverString = Args.getLastArgValue(options::OPT_solver, "euler-forward");
 
-  CmdArgs.push_back("-rpath");
-  CmdArgs.push_back("/home/matteo/Workspace/C++/marco-runtime-install/lib");
-  CmdArgs.push_back("-rpath");
-  CmdArgs.push_back("/home/matteo/Workspace/C++/marco-runtime-install/dependencies/sundials/lib");
-  CmdArgs.push_back("-L/home/matteo/Workspace/C++/marco-runtime-install/lib");
-  CmdArgs.push_back("-L/home/matteo/Workspace/C++/marco-runtime-install/dependencies/sundials/lib");
+  llvm::SmallVector<std::string> allLibsPaths;
+  collectLibraryPaths(MARCO_LIBS_PATH_STR, allLibsPaths);
+  collectLibraryPaths(MARCO_DEPENDENCIES_LIBS_PATH_STR, allLibsPaths);
+
+  for (const auto& path : allLibsPaths) {
+    CmdArgs.push_back("-rpath");
+    CmdArgs.push_back(Args.MakeArgString(path));
+
+    CmdArgs.push_back(Args.MakeArgString(("-L" + path)));
+  }
 
   // Add the main function to the simulation, if not explicitly discarded.
   if (!Args.hasArg(options::OPT_no_generate_main)) {
@@ -1019,6 +1044,9 @@ void tools::addMarcoLinkerArgs(const ToolChain &TC,
     CmdArgs.push_back("-lsundials_sunlinsolklu");
     CmdArgs.push_back("-lklu");
   }
+
+  if(strlen(MARCO_LINK_EXTRA_FLAGS_STR) > 0)
+    CmdArgs.push_back(MARCO_LINK_EXTRA_FLAGS_STR);
 
   TC.AddCXXStdlibLibArgs(Args, CmdArgs);
 }

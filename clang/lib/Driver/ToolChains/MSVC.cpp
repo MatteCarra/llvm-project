@@ -139,6 +139,10 @@ void visualstudio::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("/subsystem:console");
   }
 
+  if(getToolChain().getDriver().isMarcoMode()) {
+    addMarcoLinkerArgs(TC, Args, CmdArgs);
+  }
+
   // Add the compiler-rt library directories to libpath if they exist to help
   // the linker find the various sanitizer, builtin, and profiling runtimes.
   for (const auto &LibPath : TC.getLibraryPaths()) {

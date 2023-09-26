@@ -582,6 +582,10 @@ void tools::gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-lm");
   }
 
+  if(getToolChain().getDriver().isMarcoMode()) {
+    addMarcoLinkerArgs(ToolChain, Args, CmdArgs);
+  }
+
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_r)) {
     if (!Args.hasArg(options::OPT_nodefaultlibs)) {
       if (IsStatic || IsStaticPIE)

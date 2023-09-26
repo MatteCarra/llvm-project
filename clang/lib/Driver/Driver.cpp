@@ -241,6 +241,7 @@ void Driver::setDriverMode(StringRef Value) {
                    .Case("cpp", CPPMode)
                    .Case("cl", CLMode)
                    .Case("flang", FlangMode)
+                   .Case("marco", MarcoMode)
                    .Case("dxc", DXCMode)
                    .Default(std::nullopt))
     Mode = *M;
@@ -359,7 +360,10 @@ phases::ID Driver::getFinalPhase(const DerivedArgList &DAL,
              (PhaseArg = DAL.getLastArg(options::OPT_rewrite_legacy_objc)) ||
              (PhaseArg = DAL.getLastArg(options::OPT__migrate)) ||
              (PhaseArg = DAL.getLastArg(options::OPT__analyze)) ||
-             (PhaseArg = DAL.getLastArg(options::OPT_emit_ast))) {
+             (PhaseArg = DAL.getLastArg(options::OPT_emit_ast)) ||
+             (PhaseArg = DAL.getLastArg(options::OPT_emit_final_ast)) ||
+             (PhaseArg = DAL.getLastArg(options::OPT_emit_modelica_flattened))
+            ) {
     FinalPhase = phases::Compile;
 
   // -S only runs up to the backend.
@@ -1938,6 +1942,9 @@ void Driver::PrintHelp(bool ShowHidden) const {
   if (IsFlangMode())
     VisibilityMask = llvm::opt::Visibility(options::FlangOption);
 
+  if (isMarcoMode())
+    VisibilityMask = llvm::opt::Visibility(options::MarcoOption);
+
   std::string Usage = llvm::formatv("{0} [options] file...", Name).str();
   getOpts().printHelp(llvm::outs(), Usage.c_str(), DriverTitle.c_str(),
                       ShowHidden, /*ShowAllAliases=*/false,
@@ -1947,6 +1954,8 @@ void Driver::PrintHelp(bool ShowHidden) const {
 void Driver::PrintVersion(const Compilation &C, raw_ostream &OS) const {
   if (IsFlangMode()) {
     OS << getClangToolFullVersion("flang-new") << '\n';
+  } else if(isMarcoMode()) {
+    OS << getClangToolFullVersion("marco") << '\n';
   } else {
     // FIXME: The following handlers should use a callback mechanism, we don't
     // know what the client would like to do.
@@ -1995,6 +2004,9 @@ void Driver::HandleAutocompletions(StringRef PassedFlags) const {
   // TODO: Make sure that Clang-only options don't pollute Flang output
   if (IsFlangMode())
     VisibilityMask = llvm::opt::Visibility(options::FlangOption);
+
+  if (isMarcoMode())
+    VisibilityMask = llvm::opt::Visibility(options::MarcoOption);
 
   // Distinguish "--autocomplete=-someflag" and "--autocomplete=-someflag,"
   // because the latter indicates that the user put space before pushing tab
@@ -4024,6 +4036,69 @@ void Driver::handleArguments(Compilation &C, DerivedArgList &Args,
   }
 }
 
+void Driver::BuildMarcoActions(Compilation& C, DerivedArgList& Args, const InputList &Inputs, ActionList &Actions, ActionList& LinkerInputs) const {
+  ActionList ModelicaMergerInputs;
+
+  for (auto &I : Inputs) {
+    types::ID InputType = I.first;
+    const Arg *InputArg = I.second;
+
+    if(InputType != types::TY_Modelica) continue;
+    
+    // Build the pipeline for this file.
+    Action *Current = C.MakeAction<InputAction>(*InputArg, InputType);
+    
+    if(InputType == types::TY_Modelica) {
+      ModelicaMergerInputs.push_back(Current);
+    }
+  }
+
+  if(!ModelicaMergerInputs.empty()) {
+    auto PL = types::getCompilationPhases(*this, Args, types::TY_Modelica);
+
+    clang::driver::types::ID compilationType;
+
+    if (Args.hasArg(options::OPT_emit_modelica_flattened))
+      compilationType = types::TY_Modelica;
+    else if(Args.hasArg(options::OPT_emit_ast) || Args.hasArg(options::OPT_emit_final_ast))
+      compilationType = types::TY_AST;
+    else
+     compilationType = types::TY_LLVM_BC;
+
+    Action* Current = C.MakeAction<CompileJobAction>(ModelicaMergerInputs, compilationType);
+
+    for (size_t i = 1; i < PL.size(); i++) {
+      auto Phase = PL[i];
+
+      if (Phase == phases::Link) {
+        assert(Phase == PL.back() && "linking must be final compilation step.");
+        // We don't need to generate additional link commands if emitting AMD
+        // bitcode or compiling only for the offload device
+        if (!(C.getInputArgs().hasArg(options::OPT_hip_link) &&
+              (C.getInputArgs().hasArg(options::OPT_emit_llvm))) &&
+            !offloadDeviceOnly())
+          LinkerInputs.push_back(Current);
+        Current = nullptr;
+        break;
+      }
+
+      Action *NewCurrent = ConstructPhaseAction(C, Args, Phase, Current);
+
+      // We didn't create a new action, so we will just move to the next phase.
+      if (NewCurrent == Current)
+        continue;
+
+      Current = NewCurrent;
+
+      if (Current->getType() == types::TY_Nothing)
+        break;
+    }
+
+    if (Current)
+      Actions.push_back(Current);
+  }
+}
+
 void Driver::BuildActions(Compilation &C, DerivedArgList &Args,
                           const InputList &Inputs, ActionList &Actions) const {
   llvm::PrettyStackTraceString CrashInfo("Building compilation actions");
@@ -4087,6 +4162,8 @@ void Driver::BuildActions(Compilation &C, DerivedArgList &Args,
   for (auto &I : Inputs) {
     types::ID InputType = I.first;
     const Arg *InputArg = I.second;
+
+    if(InputType == types::TY_Modelica) continue;
 
     auto PL = types::getCompilationPhases(*this, Args, InputType);
     if (PL.empty())
@@ -4182,6 +4259,8 @@ void Driver::BuildActions(Compilation &C, DerivedArgList &Args,
       Current->propagateHostOffloadInfo(C.getActiveOffloadKinds(),
                                         /*BoundArch=*/nullptr);
   }
+
+  BuildMarcoActions(C, Args, Inputs, Actions, LinkerInputs);
 
   // Add a link action if necessary.
 
@@ -6405,6 +6484,20 @@ bool Driver::ShouldUseFlangCompiler(const JobAction &JA) const {
   return true;
 }
 
+bool Driver::ShouldUseMarcoCompiler(const JobAction &JA) const {
+  // Say "no" if there is not exactly one input of a type flang understands.
+  for(auto& input : JA.getInputs()) {
+    if (!types::isAcceptedByMarco(input->getType()))
+      return false;
+  }
+
+  // And say "no" if this is not a kind of action marco understands.
+  if (!isa<CompileJobAction>(JA) && !isa<BackendJobAction>(JA))
+    return false;
+
+  return true;
+}
+
 bool Driver::ShouldEmitStaticLibrary(const ArgList &Args) const {
   // Only emit static library if the flag is set explicitly.
   if (Args.hasArg(options::OPT_emit_static_lib))
@@ -6489,6 +6582,9 @@ Driver::getOptionVisibilityMask(bool UseDriverMode) const {
   if (IsFlangMode())  {
     return llvm::opt::Visibility(options::FlangOption);
   }
+  if (isMarcoMode())  {
+    return llvm::opt::Visibility(options::MarcoOption);
+  }
   return llvm::opt::Visibility(options::ClangOption);
 }
 
@@ -6506,6 +6602,8 @@ const char *Driver::getExecutableForDriverMode(DriverMode Mode) {
     return "flang";
   case DXCMode:
     return "clang-dxc";
+  case MarcoMode:
+    return "marco";
   }
 
   llvm_unreachable("Unhandled Mode");

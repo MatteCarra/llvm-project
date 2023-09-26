@@ -81,6 +81,12 @@ def DXCOption : OptionVisibility;
 /////////
 // Docs
 
+// DriverOption - This option should be accepted by marco.
+def MarcoOption : OptionVisibility;
+
+// MC1Option - This option should be accepted by clang -mc1.
+def MC1Option : OptionVisibility;
+
 // A short name to show in documentation. The name will be interpreted as rST.
 class DocName<string name> { string DocName = name; }
 
@@ -260,6 +266,19 @@ def flang_ignored_w_Group : OptionGroup<"<flang ignored W group>">,
 def clang_ignored_legacy_options_Group : OptionGroup<"<clang legacy flags>">,
   Group<f_Group>, Flags<[Ignored]>;
 
+// Group for Marco
+def IDA_Group : OptionGroup<"IDA">,
+    DocName<"IDA">,
+    DocBrief<[{Flags controlling the IDA solver.}]>;
+
+def MarcoCodegen_Group : OptionGroup<"Code generation">,
+    DocName<"Code generation">,
+    DocBrief<[{Flags controlling the code generation and lowering processes.}]>;
+
+def Simulation_Group : OptionGroup<"Simulation">,
+    DocName<"Simulation">,
+    DocBrief<[{Flags controlling the simulation options.}]>;
+
 def LongDouble_Group : OptionGroup<"<LongDouble group>">, Group<m_Group>,
   DocName<"Long double options">,
   DocBrief<[{Selects the long double implementation}]>;
@@ -284,6 +303,8 @@ class TargetOpts<string base>
   : KeyPathAndMacro<"TargetOpts->", base, "TARGET_"> {}
 class FrontendOpts<string base>
   : KeyPathAndMacro<"FrontendOpts.", base, "FRONTEND_"> {}
+class MarcoCodegenOpts<string base>
+    : KeyPathAndMacro<"MarcoCodegenOpts.", base, "MARCO_CODEGEN_"> {}
 class PreprocessorOutputOpts<string base>
   : KeyPathAndMacro<"PreprocessorOutputOpts.", base, "PREPROCESSOR_OUTPUT_"> {}
 class DependencyOutputOpts<string base>
@@ -628,7 +649,7 @@ def ccc_install_dir : Separate<["-"], "ccc-install-dir">, InternalDebugOpt,
   HelpText<"Simulate installation in the given directory">;
 def ccc_print_phases : Flag<["-"], "ccc-print-phases">,
   Flags<[NoXarchOption, HelpHidden]>, Visibility<[ClangOption, CLOption, DXCOption,
-  FlangOption]>,
+  FlangOption, MarcoOption]>,
   HelpText<"Dump list of actions to perform">;
 def ccc_print_bindings : Flag<["-"], "ccc-print-bindings">, InternalDebugOpt,
   HelpText<"Show bindings of tools to actions">;
@@ -856,9 +877,24 @@ def ObjCXX : Flag<["-"], "ObjC++">, Flags<[NoXarchOption]>,
 def ObjC : Flag<["-"], "ObjC">, Flags<[NoXarchOption]>,
   HelpText<"Treat source input files as Objective-C inputs">;
 def O : Joined<["-"], "O">, Group<O_Group>,
-  Visibility<[ClangOption, CC1Option, FC1Option, FlangOption]>;
-def O_flag : Flag<["-"], "O">, Visibility<[ClangOption, CC1Option, FC1Option]>,
-  Alias<O>, AliasArgs<["1"]>;
+  Visibility<[ClangOption, CC1Option, FC1Option, FlangOption, MarcoOption, MC1Option]>;
+
+def : Visibility<[MarcoOption, MC1Option]>, Alias<O>, AliasArgs<["0"]>,
+  HelpText<"Disable optimizations">;
+def : Visibility<[MarcoOption, MC1Option]>, Alias<O>, AliasArgs<["0"]>,
+  HelpText<"Disable optimizations">;
+def O_flag : Flag<["-"], "O">, Visibility<[ClangOption, CC1Option, FC1Option,MarcoOption, MC1Option]>,
+  Alias<O>, AliasArgs<["1"]>,
+  HelpText<"Optimize for speed">;
+def : Visibility<[MarcoOption, MC1Option]>, Alias<O>, AliasArgs<["2"]>,
+  HelpText<"Optimize for speed">;
+def : Visibility<[MarcoOption, MC1Option]>, Alias<O>, AliasArgs<["3"]>,
+  HelpText<"Optimize for speed">;
+def : Visibility<[MarcoOption, MC1Option]>, Alias<O>, AliasArgs<["s"]>,
+  HelpText<"Optimize for size">;
+def : Visibility<[MarcoOption, MC1Option]>, Alias<O>, AliasArgs<["z"]>,
+  HelpText<"Optimize for size">;
+
 def Ofast : Joined<["-"], "Ofast">, Group<O_Group>,
   Visibility<[ClangOption, CC1Option, FlangOption]>;
 def P : Flag<["-"], "P">,
@@ -879,7 +915,7 @@ def Qunused_arguments : Flag<["-"], "Qunused-arguments">,
   HelpText<"Don't emit warning for unused driver arguments">;
 def Q : Flag<["-"], "Q">, IgnoredGCCCompat;
 def S : Flag<["-"], "S">, Flags<[NoXarchOption]>,
-  Visibility<[ClangOption, CC1Option, FlangOption, FC1Option]>,
+  Visibility<[ClangOption, CC1Option, FlangOption, FC1Option, MarcoOption, MC1Option]>,
   Group<Action_Group>,
   HelpText<"Only run preprocess and compilation steps">;
 def T : JoinedOrSeparate<["-"], "T">, Group<T_Group>,
@@ -1085,7 +1121,7 @@ def cxx_isystem : JoinedOrSeparate<["-"], "cxx-isystem">, Group<clang_i_Group>,
   Visibility<[ClangOption, CC1Option]>,
   MetaVarName<"<directory>">;
 def c : Flag<["-"], "c">, Flags<[NoXarchOption]>,
-  Visibility<[ClangOption, FlangOption]>, Group<Action_Group>,
+  Visibility<[ClangOption, FlangOption, MarcoOption, MC1Option]>, Group<Action_Group>,
   HelpText<"Only run preprocess, compile, and assemble steps">;
 defm convergent_functions : BoolFOption<"convergent-functions",
   LangOpts<"ConvergentFunctions">, DefaultFalse,
@@ -1356,10 +1392,10 @@ def dynamic : Flag<["-"], "dynamic">, Flags<[NoArgumentUnused]>;
 def d_Flag : Flag<["-"], "d">, Group<d_Group>;
 def d_Joined : Joined<["-"], "d">, Group<d_Group>;
 def emit_ast : Flag<["-"], "emit-ast">,
-  Visibility<[ClangOption, CLOption, DXCOption]>,
+  Visibility<[ClangOption, CLOption, DXCOption, MC1Option, MarcoOption]>,
   HelpText<"Emit Clang AST files for source inputs">;
 def emit_llvm : Flag<["-"], "emit-llvm">,
-  Visibility<[ClangOption, CC1Option, FC1Option, FlangOption]>,
+  Visibility<[ClangOption, CC1Option, FC1Option, FlangOption, MarcoOption, MC1Option]>,
   Group<Action_Group>,
   HelpText<"Use the LLVM representation for assembler and object files">;
 def emit_interface_stubs : Flag<["-"], "emit-interface-stubs">,
@@ -3931,7 +3967,7 @@ defm emit_compact_unwind_non_canonical : BoolFOption<"emit-compact-unwind-non-ca
           "Try emitting Compact-Unwind for non-canonical entries. Maybe overriden by other constraints">,
   NegFlag<SetFalse>>;
 def g_Flag : Flag<["-"], "g">, Group<g_Group>,
-    Visibility<[ClangOption, CLOption, DXCOption, FlangOption]>,
+    Visibility<[ClangOption, CLOption, DXCOption, FlangOption, MarcoOption, MC1Option]>,
     HelpText<"Generate source-level debug information">;
 def gline_tables_only : Flag<["-"], "gline-tables-only">, Group<gN_Group>,
   Visibility<[ClangOption, CLOption, DXCOption, FlangOption]>,
@@ -4064,7 +4100,7 @@ def gno_embed_source : Flag<["-"], "gno-embed-source">, Group<g_flags_Group>,
 def headerpad__max__install__names : Joined<["-"], "headerpad_max_install_names">;
 def help : Flag<["-", "--"], "help">,
     Visibility<[ClangOption, CC1Option, CC1AsOption,
-                FC1Option, FlangOption, DXCOption]>,
+                FC1Option, FlangOption, DXCOption, MarcoOption, MarcoOption, MC1Option]>,
     HelpText<"Display available options">,
     MarshallingInfoFlag<FrontendOpts<"ShowHelp">>;
 def ibuiltininc : Flag<["-"], "ibuiltininc">, Group<clang_i_Group>,
@@ -5058,7 +5094,7 @@ def nostdlibxx : Flag<["-"], "nostdlib++">;
 def object : Flag<["-"], "object">;
 def o : JoinedOrSeparate<["-"], "o">,
   Flags<[NoXarchOption]>,
-  Visibility<[ClangOption, CC1Option, CC1AsOption, FC1Option, FlangOption]>,
+  Visibility<[ClangOption, CC1Option, CC1AsOption, FC1Option, FlangOption, MarcoOption, MC1Option]>,
   HelpText<"Write output to <file>">, MetaVarName<"<file>">,
   MarshallingInfoString<FrontendOpts<"OutputFile">>;
 def object_file_name_EQ : Joined<["-"], "object-file-name=">,
@@ -5247,7 +5283,7 @@ def no_system_header_prefix : Joined<["--"], "no-system-header-prefix=">,
 def : Separate<["--"], "no-system-header-prefix">, Alias<no_system_header_prefix>;
 def s : Flag<["-"], "s">, Group<Link_Group>;
 def target : Joined<["--"], "target=">, Flags<[NoXarchOption]>,
-  Visibility<[ClangOption, CLOption, DXCOption, FlangOption]>,
+  Visibility<[ClangOption, CLOption, DXCOption, FlangOption, MarcoOption, MC1Option]>,
   HelpText<"Generate code for the given target">;
 def darwin_target_variant : Separate<["-"], "darwin-target-variant">,
   Flags<[NoXarchOption]>, Visibility<[ClangOption, CLOption]>,
@@ -5454,7 +5490,7 @@ def _serialize_diags : Separate<["-", "--"], "serialize-diagnostics">,
   HelpText<"Serialize compiler diagnostics to a file">;
 // We give --version different semantics from -version.
 def _version : Flag<["--"], "version">,
-  Visibility<[ClangOption, CLOption, DXCOption, FlangOption]>,
+  Visibility<[ClangOption, CLOption, DXCOption, MarcoOption, FlangOption]>,
   HelpText<"Print version information">;
 def _signed_char : Flag<["--"], "signed-char">, Alias<fsigned_char>;
 def _std : Separate<["--"], "std">, Alias<std_EQ>;
@@ -5494,10 +5530,10 @@ def fno_pie : Flag<["-"], "fno-pie">, Group<f_Group>;
 } // let Vis = [Default, FlangOption]
 
 //===----------------------------------------------------------------------===//
-// Target Options (clang + flang-new)
+// Target Options (clang + flang-new + marco + mc1)
 //===----------------------------------------------------------------------===//
 let Flags = [TargetSpecific] in {
-let Visibility = [ClangOption, FlangOption] in {
+let Visibility = [ClangOption, FlangOption, MarcoOption, MC1Option] in {
 
 def mcpu_EQ : Joined<["-"], "mcpu=">, Group<m_Group>,
   HelpText<"For a list of available CPUs for the target use '-mcpu=help'">;
@@ -6191,6 +6227,11 @@ def J : JoinedOrSeparate<["-"], "J">,
   Group<gfortran_Group>,
   Alias<module_dir>;
 
+
+def emit_mlir : Flag<["-"], "emit-mlir">, Group<Action_Group>,
+  Visibility<[FC1Option, MC1Option]>,
+  HelpText<"Build the parse tree, then lower it to MLIR">;
+
 //===----------------------------------------------------------------------===//
 // FC1 Options
 //===----------------------------------------------------------------------===//
@@ -6247,7 +6288,6 @@ defm analyzed_objects_for_unparse : OptOutFC1FFlag<"analyzed-objects-for-unparse
 
 def emit_fir : Flag<["-"], "emit-fir">, Group<Action_Group>,
   HelpText<"Build the parse tree, then lower it to FIR">;
-def emit_mlir : Flag<["-"], "emit-mlir">, Alias<emit_fir>;
 
 def emit_hlfir : Flag<["-"], "emit-hlfir">, Group<Action_Group>,
   HelpText<"Build the parse tree, then lower it to HLFIR">;
@@ -7223,7 +7263,7 @@ def aligned_alloc_unavailable : Flag<["-"], "faligned-alloc-unavailable">,
 
 def version : Flag<["-"], "version">,
   HelpText<"Print the compiler version">,
-  Visibility<[CC1Option, CC1AsOption, FC1Option]>,
+  Visibility<[CC1Option, CC1AsOption, FC1Option, MC1Option]>,
   MarshallingInfoFlag<FrontendOpts<"ShowVersion">>;
 
 def main_file_name : Separate<["-"], "main-file-name">,
@@ -7580,7 +7620,7 @@ def : Flag<["-"], "fno-cuda-approx-transcendentals">, Alias<fno_gpu_approx_trans
 // Frontend Options - cc1 + fc1
 //===----------------------------------------------------------------------===//
 
-let Visibility = [CC1Option, FC1Option] in {
+let Visibility = [CC1Option, FC1Option, MC1Option] in {
 let Group = Action_Group in {
 
 def emit_obj : Flag<["-"], "emit-obj">,
@@ -8238,6 +8278,154 @@ def dxc_entrypoint : Option<["--", "/", "-"], "E", KIND_JOINED_OR_SEPARATE>,
                      Group<dxc_Group>,
                      Flags<[NoXarchOption]>, Visibility<[DXCOption]>,
                      HelpText<"Entry point name">;
+
+//Marco
+def print_statistics : Flag<["--"], "print-statistics">,
+    Visibility<[MC1Option]>,
+    HelpText<"Print statistics">;
+
+defm multithreading : BoolOption<"", "multithreading",
+    MarcoCodegenOpts<"Multithreading">,
+    DefaultTrue,
+    PosFlag<SetTrue, [], [], "Use">,
+    NegFlag<SetFalse, [], [], "Don't use">,
+    BothFlags<[], [MarcoOption, MC1Option], " multithreading">>,
+    Group<MarcoCodegen_Group>;
+
+def omc_path : Joined<["--"], "omc-path=">,
+    Visibility<[MarcoOption, MC1Option]>,
+    HelpText<"Set a custom path for the OpenModelica compiler">;
+
+def omc_arg : Joined<["--"], "Xomc=">,
+    Visibility<[MarcoOption, MC1Option]>,
+    HelpText<"Pass a custom argument to the OpenModelica compiler (the option can be used multiple times)">;
+
+def omc_bypass : Flag<["--"], "omc-bypass">,
+    Visibility<[MarcoOption, MC1Option]>,
+    HelpText<"Bypass OMC and pass the source directly to MARCO">;
+
+defm assertions : BoolOption<"", "assertions",
+    MarcoCodegenOpts<"Assertions">,
+    DefaultTrue,
+    PosFlag<SetTrue, [], [], "Generate">,
+    NegFlag<SetFalse, [], [], "Don't generate">,
+    BothFlags<[], [MarcoOption, MC1Option], " assertions">>,
+    Group<MarcoCodegen_Group>;
+
+defm generate_main : BoolOption<"", "generate-main",
+    MarcoCodegenOpts<"GenerateMain">,
+    DefaultTrue,
+    PosFlag<SetTrue, [], [], "Generate">,
+    NegFlag<SetFalse, [], [], "Don't generate">,
+    BothFlags<[], [MarcoOption, MC1Option], " the main function that starts the simulation">>,
+    Group<MarcoCodegen_Group>;
+
+def bit_width : Joined<["--"], "bit-width=">,
+    Visibility<[MarcoOption, MC1Option]>,
+    Group<MarcoCodegen_Group>,
+    HelpText<"Set the bit-width of the simulation data">;
+
+defm function_inlining : BoolOption<"", "inlining",
+    MarcoCodegenOpts<"Inlining">,
+    DefaultFalse,
+    PosFlag<SetTrue, [], [], "Inline functions when suggested by the annotations">,
+    NegFlag<SetFalse, [], [], "Never inline functions">,
+    BothFlags<[], [MarcoOption, MC1Option], "">>,
+    Group<MarcoCodegen_Group>;
+
+defm output_arrays_promotion : BoolOption<"", "output-arrays-promotion",
+    MarcoCodegenOpts<"OutputArraysPromotion">,
+    DefaultFalse,
+    PosFlag<SetTrue, [], [], "Convert">,
+    NegFlag<SetFalse, [], [], "Don't convert">,
+    BothFlags<[], [MarcoOption, MC1Option], " output arrays into arguments to delegate the allocation to the caller">>,
+    Group<MarcoCodegen_Group>;
+
+defm read_only_variables_propagation : BoolOption<"", "read-only-variables-propagation",
+    MarcoCodegenOpts<"ParametersPropagation">,
+    DefaultTrue,
+    PosFlag<SetTrue, [], [], "Propagate">,
+    NegFlag<SetFalse, [], [], "Don't propagate">,
+    BothFlags<[], [MarcoOption, MC1Option], " the values assigned to read-only variables through binding equations">>,
+    Group<MarcoCodegen_Group>;
+
+defm variables_to_parameters_promotion : BoolOption<"", "variables-to-parameters-promotion",
+    MarcoCodegenOpts<"VariablesToParametersPromotion">,
+    DefaultTrue,
+    PosFlag<SetTrue, [], [], "Promote">,
+    NegFlag<SetFalse, [], [], "Don't promote">,
+    BothFlags<[], [MarcoOption, MC1Option], " variables to parameters when depending only on constants or parameters">>,
+    Group<MarcoCodegen_Group>;
+
+defm cse : BoolOption<"", "cse",
+    MarcoCodegenOpts<"CSE">,
+    DefaultFalse,
+    PosFlag<SetTrue, [], [], "Enable">,
+    NegFlag<SetFalse, [], [], "Disable">,
+    BothFlags<[], [MarcoOption, MC1Option], " common subexpression elimination">>,
+    Group<MarcoCodegen_Group>;
+
+defm omp : BoolOption<"", "omp",
+    MarcoCodegenOpts<"OpenMP">,
+    DefaultFalse,
+    PosFlag<SetTrue, [], [], "Enable OpenMP usage (experimental)">,
+    NegFlag<SetFalse, [], [], "Disable OpenMP usage">,
+    BothFlags<[], [MarcoOption, MC1Option], "">>,
+    Group<MarcoCodegen_Group>;
+
+def model : Joined<["--"], "model=">,
+    Group<Simulation_Group>,
+    Visibility<[MarcoOption, MC1Option]>,
+    HelpText<"Model name">;
+
+def filter : Joined<["--"], "variable-filter=">,
+    Group<Simulation_Group>,
+    Visibility<[MarcoOption, MC1Option]>,
+    HelpText<"Filter for the variables to be printed">;
+
+def solver : Joined<["--"], "solver=">,
+    Group<Simulation_Group>,
+    Visibility<[MarcoOption, MC1Option]>,
+    HelpText<"Solver (possible options: euler-forward, ida)">;
+
+defm ida_reduced_system : BoolOption<"", "ida-reduced-system",
+    MarcoCodegenOpts<"IDA">,
+    DefaultTrue,
+    PosFlag<SetTrue, [], [], "IDA: compute a reduced system for the external solver">,
+    NegFlag<SetFalse, [], [], "IDA: all variables and equations are passed to the external solver">,
+    BothFlags<[], [MarcoOption, MC1Option], "">>,
+    Group<Simulation_Group>;
+
+defm ida_reduced_derivatives : BoolOption<"", "ida-reduced-derivatives",
+    MarcoCodegenOpts<"IDA">,
+    DefaultTrue,
+    PosFlag<SetTrue, [], [], "IDA: determine the derivatives that are always equal to zero">,
+    NegFlag<SetFalse, [], [], "IDA: do not determine the derivatives that are always equal to zero">,
+    BothFlags<[], [MarcoOption, MC1Option], "">>,
+    Group<Simulation_Group>;
+
+defm ida_jacobian_one_sweep : BoolOption<"", "ida-jacobian-one-sweep",
+    MarcoCodegenOpts<"IDA">,
+    DefaultTrue,
+    PosFlag<SetTrue, [], [], "IDA: enable one-sweep computation of derivatives with respect to state and derivative variables">,
+    NegFlag<SetFalse, [], [], "IDA: disable one-sweep computation of derivatives with respect to state and derivative variables">,
+    BothFlags<[], [MarcoOption, MC1Option], "">>,
+    Group<Simulation_Group>;
+
+//===----------------------------------------------------------------------===//
+// Frontend Options - mc1
+//===----------------------------------------------------------------------===//
+
+def emit_modelica_flattened : Flag<["-"], "emit-flattened">,
+    Visibility<[MarcoOption, MC1Option]>,
+    Group<Action_Group>,
+    HelpText<"Emit flattened Modelica">;
+
+def emit_final_ast : Flag<["-"], "emit-final-ast">,
+    Visibility<[MarcoOption, MC1Option]>,
+    Group<Action_Group>,
+    HelpText<"Emit the final AST, after the frontend passes">;
+
 def dxc_validator_path_EQ : Joined<["--"], "dxv-path=">, Group<dxc_Group>,
   HelpText<"DXIL validator installation path">;
 def dxc_disable_validation : DXCFlag<"Vd">,

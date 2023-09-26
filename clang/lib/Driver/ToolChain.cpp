@@ -13,6 +13,7 @@
 #include "ToolChains/CommonArgs.h"
 #include "ToolChains/Flang.h"
 #include "ToolChains/InterfaceStubs.h"
+#include "ToolChains/Marco.h"
 #include "clang/Basic/ObjCRuntime.h"
 #include "clang/Basic/Sanitizers.h"
 #include "clang/Config/config.h"
@@ -310,6 +311,7 @@ static const DriverSuffix *FindDriverSuffix(StringRef ProgName, size_t &Pos) {
       {"cl", "--driver-mode=cl"},
       {"++", "--driver-mode=g++"},
       {"flang", "--driver-mode=flang"},
+      {"marco", "--driver-mode=marco"},
       {"clang-dxc", "--driver-mode=dxc"},
   };
 
@@ -443,6 +445,12 @@ Tool *ToolChain::getFlang() const {
   if (!Flang)
     Flang.reset(new tools::Flang(*this));
   return Flang.get();
+}
+
+Tool *ToolChain::getMarco() const {
+  if(!Marco)
+    Marco.reset(new tools::Marco(*this));
+  return Marco.get();
 }
 
 Tool *ToolChain::buildAssembler() const {
@@ -772,6 +780,7 @@ bool ToolChain::needsGCovInstrumentation(const llvm::opt::ArgList &Args) {
 
 Tool *ToolChain::SelectTool(const JobAction &JA) const {
   if (D.IsFlangMode() && getDriver().ShouldUseFlangCompiler(JA)) return getFlang();
+  if(D.isMarcoMode() && getDriver().ShouldUseMarcoCompiler(JA)) return getMarco();
   if (getDriver().ShouldUseClangCompiler(JA)) return getClang();
   Action::ActionClass AC = JA.getKind();
   if (AC == Action::AssembleJobClass && useIntegratedAs() &&

@@ -164,6 +164,13 @@ if(CLANG_ENABLE_LIBXML2)
   endif()
 endif()
 
+#------------------------------------------------------------------------------
+# Marco Runtime
+#------------------------------------------------------------------------------
+find_package(MARCORuntime REQUIRED CONFIG)
+
+#------------------------------------------------------------------------------
+
 include(CheckIncludeFile)
 check_include_file(sys/resource.h CLANG_HAVE_RLIMITS)
 

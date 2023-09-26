@@ -684,6 +684,10 @@ void darwin::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     addFortranRuntimeLibs(getToolChain(), CmdArgs);
   }
 
+  if(getToolChain().getDriver().isMarcoMode()) {
+    addMarcoLinkerArgs(getToolChain(), Args, CmdArgs);
+  }
+
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs))
     addOpenMPRuntime(CmdArgs, getToolChain(), Args);
 

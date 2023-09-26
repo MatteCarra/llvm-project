@@ -365,6 +365,7 @@ phases::ID Driver::getFinalPhase(const DerivedArgList &DAL,
              (PhaseArg = DAL.getLastArg(options::OPT__migrate)) ||
              (PhaseArg = DAL.getLastArg(options::OPT__analyze)) ||
              (PhaseArg = DAL.getLastArg(options::OPT_emit_ast)) ||
+             (PhaseArg = DAL.getLastArg(options::OPT_emit_final_ast)) ||
              (PhaseArg = DAL.getLastArg(options::OPT_emit_modelica_flattened))
             ) {
     FinalPhase = phases::Compile;
@@ -1957,6 +1958,8 @@ void Driver::PrintHelp(bool ShowHidden) const {
 void Driver::PrintVersion(const Compilation &C, raw_ostream &OS) const {
   if (IsFlangMode()) {
     OS << getClangToolFullVersion("flang-new") << '\n';
+  } else if(isMarcoMode()) {
+    OS << getClangToolFullVersion("marco") << '\n';
   } else {
     // FIXME: The following handlers should use a callback mechanism, we don't
     // know what the client would like to do.
@@ -4057,7 +4060,16 @@ void Driver::BuildMarcoActions(Compilation& C, DerivedArgList& Args, const Input
   if(!ModelicaMergerInputs.empty()) {
     auto PL = types::getCompilationPhases(*this, Args, types::TY_Modelica);
 
-    Action* Current = C.MakeAction<CompileJobAction>(ModelicaMergerInputs, types::TY_LLVM_BC);
+    clang::driver::types::ID compilationType;
+
+    if (Args.hasArg(options::OPT_emit_modelica_flattened))
+      compilationType = types::TY_Modelica;
+    else if(Args.hasArg(options::OPT_emit_ast) || Args.hasArg(options::OPT_emit_final_ast))
+      compilationType = types::TY_AST;
+    else
+     compilationType = types::TY_LLVM_BC;
+
+    Action* Current = C.MakeAction<CompileJobAction>(ModelicaMergerInputs, compilationType);
 
     for (size_t i = 1; i < PL.size(); i++) {
       auto Phase = PL[i];
@@ -4778,8 +4790,6 @@ Action *Driver::ConstructPhaseAction(
       return C.MakeAction<MigrateJobAction>(Input, types::TY_Remap);
     if (Args.hasArg(options::OPT_emit_ast))
       return C.MakeAction<CompileJobAction>(Input, types::TY_AST);
-    if (Args.hasArg(options::OPT_emit_modelica_flattened))
-      return C.MakeAction<CompileJobAction>(Input, types::TY_Modelica);
     if (Args.hasArg(options::OPT_module_file_info))
       return C.MakeAction<CompileJobAction>(Input, types::TY_ModuleFile);
     if (Args.hasArg(options::OPT_verify_pch))

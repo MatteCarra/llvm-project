@@ -78,11 +78,6 @@ void Marco::ConstructJob(Compilation &C, const JobAction &JA,
   // Invoke ourselves in -mc1 mode.
   CmdArgs.push_back("-mc1");
 
-  // Add the "effective" target triple.
-  //CmdArgs.push_back("-triple");
-  //CmdArgs.push_back(Args.MakeArgString(TripleStr));
-
-  //TODO how to handle mlir?
   if (isa<CompileJobAction>(JA) || isa<BackendJobAction>(JA)) {
     if(JA.getType() == types::TY_Modelica) {
       if(Args.hasArg(options::OPT_emit_modelica_flattened)) {
@@ -92,14 +87,16 @@ void Marco::ConstructJob(Compilation &C, const JobAction &JA,
       }
     } else if (JA.getType() == types::TY_AST) {
       if(Args.hasArg(options::OPT_emit_final_ast)) {
-        CmdArgs.push_back("-emit-ast");
-      } else {
         CmdArgs.push_back("-emit-final-ast");
+      } else {
+        CmdArgs.push_back("-emit-ast");
       }
     } else if (JA.getType() == types::TY_LLVM_IR || JA.getType() == types::TY_LTO_IR) {
       CmdArgs.push_back("-emit-llvm");
     } else if (JA.getType() == types::TY_LLVM_BC || JA.getType() == types::TY_LTO_BC) {
       CmdArgs.push_back("-emit-llvm-bc");
+    } else if (JA.getType() == types::TY_PP_Asm) {
+      CmdArgs.push_back("-S");
     } else {
       assert(false && "Unexpected output type!");
     }

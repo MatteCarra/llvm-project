@@ -1392,7 +1392,7 @@ def dynamic : Flag<["-"], "dynamic">, Flags<[NoArgumentUnused]>;
 def d_Flag : Flag<["-"], "d">, Group<d_Group>;
 def d_Joined : Joined<["-"], "d">, Group<d_Group>;
 def emit_ast : Flag<["-"], "emit-ast">,
-  Visibility<[ClangOption, CLOption, DXCOption]>,
+  Visibility<[ClangOption, CLOption, DXCOption, MC1Option, MarcoOption]>,
   HelpText<"Emit Clang AST files for source inputs">;
 def emit_llvm : Flag<["-"], "emit-llvm">,
   Visibility<[ClangOption, CC1Option, FC1Option, FlangOption, MarcoOption, MC1Option]>,
@@ -3967,7 +3967,7 @@ defm emit_compact_unwind_non_canonical : BoolFOption<"emit-compact-unwind-non-ca
           "Try emitting Compact-Unwind for non-canonical entries. Maybe overriden by other constraints">,
   NegFlag<SetFalse>>;
 def g_Flag : Flag<["-"], "g">, Group<g_Group>,
-    Visibility<[ClangOption, CLOption, DXCOption, FlangOption]>,
+    Visibility<[ClangOption, CLOption, DXCOption, FlangOption, MarcoOption, MC1Option]>,
     HelpText<"Generate source-level debug information">;
 def gline_tables_only : Flag<["-"], "gline-tables-only">, Group<gN_Group>,
   Visibility<[ClangOption, CLOption, DXCOption, FlangOption]>,
@@ -5530,10 +5530,10 @@ def fno_pie : Flag<["-"], "fno-pie">, Group<f_Group>;
 } // let Vis = [Default, FlangOption]
 
 //===----------------------------------------------------------------------===//
-// Target Options (clang + flang-new)
+// Target Options (clang + flang-new + marco + mc1)
 //===----------------------------------------------------------------------===//
 let Flags = [TargetSpecific] in {
-let Visibility = [ClangOption, FlangOption] in {
+let Visibility = [ClangOption, FlangOption, MarcoOption, MC1Option] in {
 
 def mcpu_EQ : Joined<["-"], "mcpu=">, Group<m_Group>,
   HelpText<"For a list of available CPUs for the target use '-mcpu=help'">;
@@ -6229,7 +6229,7 @@ def J : JoinedOrSeparate<["-"], "J">,
 
 
 def emit_mlir : Flag<["-"], "emit-mlir">, Group<Action_Group>,
-  Visibility<[FC1Option,MarcoOption, MC1Option]>,
+  Visibility<[FC1Option, MC1Option]>,
   HelpText<"Build the parse tree, then lower it to MLIR">;
 
 //===----------------------------------------------------------------------===//
@@ -7263,7 +7263,7 @@ def aligned_alloc_unavailable : Flag<["-"], "faligned-alloc-unavailable">,
 
 def version : Flag<["-"], "version">,
   HelpText<"Print the compiler version">,
-  Visibility<[CC1Option, CC1AsOption, FC1Option, MarcoOption, MC1Option]>,
+  Visibility<[CC1Option, CC1AsOption, FC1Option, MC1Option]>,
   MarshallingInfoFlag<FrontendOpts<"ShowVersion">>;
 
 def main_file_name : Separate<["-"], "main-file-name">,
@@ -8281,7 +8281,7 @@ def dxc_entrypoint : Option<["--", "/", "-"], "E", KIND_JOINED_OR_SEPARATE>,
 
 //Marco
 def print_statistics : Flag<["--"], "print-statistics">,
-    Visibility<[MarcoOption, MarcoOption, MC1Option]>,
+    Visibility<[MC1Option]>,
     HelpText<"Print statistics">;
 
 defm multithreading : BoolOption<"", "multithreading",
@@ -8416,12 +8416,12 @@ defm ida_jacobian_one_sweep : BoolOption<"", "ida-jacobian-one-sweep",
 // Frontend Options - mc1
 //===----------------------------------------------------------------------===//
 
-def emit_modelica_flattened : Flag<["--"], "emit-flattened">,
+def emit_modelica_flattened : Flag<["-"], "emit-flattened">,
     Visibility<[MarcoOption, MC1Option]>,
     Group<Action_Group>,
     HelpText<"Emit flattened Modelica">;
 
-def emit_final_ast : Flag<["--"], "emit-final-ast">,
+def emit_final_ast : Flag<["-"], "emit-final-ast">,
     Visibility<[MarcoOption, MC1Option]>,
     Group<Action_Group>,
     HelpText<"Emit the final AST, after the frontend passes">;
